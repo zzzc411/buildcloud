@@ -5,13 +5,13 @@
 
 > 面向建筑施工企业的工程项目管理平台：微服务架构，覆盖**项目立项、合同资金、材料库存与集中申领（高并发主战场）、多级审批、异步报表**，并内置基于 **RAG** 的企业制度/施工规范知识库问答。
 
-- 📋 总规格（唯一范围与排期依据）：[docs/spec/buildcloud-spec-v1.0.md](docs/spec/buildcloud-spec-v1.0.md)
+- 📋 总规格（唯一范围与排期依据）：[docs/spec/buildcloud-spec-v1.1.md](docs/spec/buildcloud-spec-v1.1.md)
 - 🗂️ 文档中心：[docs/00-index.md](docs/00-index.md) ｜ 开发计划拆分：[docs/plans/00-overview.md](docs/plans/00-overview.md)
-- 🤖 人与智能体共同开发约束：[AGENTS.md](AGENTS.md)
+- 🤖 人与智能体共同开发约束：[AGENTS.md](AGENTS.md) ｜ 子智能体派发指南：[docs/plans/_dispatch.md](docs/plans/_dispatch.md)
 
 ## 项目状态
 
-**规划完成，代码未动工（W0 文档与仓库初始化阶段）。** 业务代码自 2026-11-30（W1）起按周推进，每周计划与验收见 [docs/plans/00-overview.md](docs/plans/00-overview.md)。
+**规划完成，W1-W8 计划已全部拆分（见 [docs/plans/00-overview.md](docs/plans/00-overview.md)），代码未动工。** 业务代码自 2026-11-30（W1）起按周推进；计划可整周派发给子智能体执行（派发规则见 [docs/plans/_dispatch.md](docs/plans/_dispatch.md)）。
 
 > **关于二次开发（诚信声明）**：本项目基于开源微服务基座 [yudao-cloud](https://github.com/YunaiV/yudao-cloud)（master-jdk17 分支，MIT 协议）裁剪二次开发——用户/权限/工作流等通用能力来自基座；**六个建筑业务域（项目/合同/材料/审批/报表/AI）、高并发申领链路、RAG 知识库、部署上线**为自研设计与实现。
 
@@ -55,8 +55,8 @@
 buildcloud/
 ├── README.md / AGENTS.md / LICENSE / .gitignore
 ├── docs/                          # 文档中心（现已就绪，见 docs/00-index.md）
-│   ├── spec/                      #   总规格（v1.0 生效）
-│   ├── plans/                     #   开发计划（从 spec 按周/专项拆分）
+│   ├── spec/                      #   总规格（v1.1 生效）
+│   ├── plans/                     #   开发计划（W1-W8 + 专项已拆分；含 00-overview/_template/_dispatch）
 │   ├── decisions/                 #   ADR 决策记录
 │   ├── architecture/              #   架构图 / ER 图 / 读码笔记
 │   ├── testing/                   #   压测报告 / 评测集

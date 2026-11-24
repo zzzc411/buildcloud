@@ -1,14 +1,14 @@
 # AGENTS.md — 人与智能体共同开发约束
 
 > 本文件对**所有协作者一视同仁**：无论是人类开发者，还是参与本项目的任何 AI 智能体（编码助手/子代理/自动化脚本）。接受任务即视为接受本约束。
-> 违反「红线」条款的产出不得合入 `main`。冲突裁决顺序：本文件 < [docs/spec/buildcloud-spec-v1.0.md](docs/spec/buildcloud-spec-v1.0.md) < 当前生效的开发计划。
+> 违反「红线」条款的产出不得合入 `main`。冲突裁决顺序：本文件 < [docs/spec/buildcloud-spec-v1.1.md](docs/spec/buildcloud-spec-v1.1.md) < 当前生效的开发计划。
 
 ## 1. 项目事实卡（先读这个再动手）
 
 | 项 | 值 |
 | --- | --- |
 | 项目 | 筑云 BuildCloud — 建筑工程项目管理平台（微服务） |
-| 本地开发工作区 | `D:\project\Engineering Management Platform`（**路径含空格**，命令行务必加引号） |
+| 本地开发工作区 | `D:\project\buildcloud`（路径不含空格；引用其他含空格路径时仍需引号包裹） |
 | 远程仓库 | https://github.com/zzzc411/buildcloud.git （公开） |
 | 基线 | yudao-cloud **master-jdk17** 分支（JDK 17 + Spring Boot 3.5），W2 裁剪引入 |
 | 命名 | 包名 `com.buildcloud`（仅自研模块）；模块前缀 `buildcloud-`；业务表前缀 `bc_` |
@@ -18,8 +18,8 @@
 
 ## 2. 单一事实来源（文档纪律）
 
-1. **范围与排期只看 spec**（`docs/spec/buildcloud-spec-v1.0.md`）。spec 变更必须升版本号 + §14 变更记录 + 旧版归档 `docs/archive/`，禁止原地静默修改；
-2. 开工一个工作包前，先从 `docs/plans/_template.md` 创建计划并在 `docs/plans/00-overview.md` 登记；**计划只能细化、不能扩权**——发现需要新增/变更范围，停下来：记 ADR（`docs/decisions/`）或回 spec 升版本，经确认后再继续；
+1. **范围与排期只看 spec**（`docs/spec/buildcloud-spec-v1.1.md`）。spec 变更必须升版本号 + §14 变更记录 + 旧版归档 `docs/archive/`，禁止原地静默修改；
+2. 开工一个工作包前，先从 `docs/plans/_template.md` 创建计划并在 `docs/plans/00-overview.md` 登记；**计划只能细化、不能扩权**——发现需要新增/变更范围，停下来：记 ADR（`docs/decisions/`）或回 spec 升版本，经确认后再继续；以子智能体派发执行时，遵循 `docs/plans/_dispatch.md` 的派发规则与提示词模板；
 3. 新建任何文档必须登记进 `docs/00-index.md`；文档命名 kebab-case；被取代的文档移入 `docs/archive/`，不删除；
 4. 完成工作包 = 验收清单全勾 + 状态更新 + 进度日志最后一行写明结果。
 
@@ -57,7 +57,7 @@
 4. **依赖保守**：不主动新增依赖；确需新增（含版本冲突解决）记 ADR，说明为何不用现有依赖；
 5. **生成代码必须自查**：编译 + 相邻测试 + 与基座风格一致性；代码生成器产物要人工精修后才算交付；
 6. **长任务留痕**：跨多轮的工作，每轮结束在当前计划的「进度日志」追加一行（做了什么/卡在哪/下一步），保证任何人接手不丢上下文；
-7. **环境注意**：Windows + PowerShell + 路径含空格（引号包裹）；JDK 17；Docker Desktop 可用但 16G 内存——起全栈前先看 `docs/ops/middleware-limits.md`（W1 产出）中的资源限额，必要时分批启动；
+7. **环境注意**：Windows + PowerShell（工作区 `D:\project\buildcloud` 路径无空格，引用其他含空格路径仍要引号）；JDK 17；Docker Desktop 可用但 16G 内存——起全栈前先看 `docs/ops/middleware-limits.md`（W1 产出）中的资源限额，必要时分批启动；
 8. **遇到阻塞**：连试两种合理方案仍不通，写清现象与尝试记录，标记计划状态为「阻塞」并求助，不要静默绕过或降低验收标准。
 
 ## 7. 沟通与口径（对外表述）
