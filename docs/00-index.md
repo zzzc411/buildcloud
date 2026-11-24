@@ -46,6 +46,6 @@ docs/
 | `spec/buildcloud-spec-v1.0.md` | 2026-11-24 | 生效 | 总规格 v1.0（已确认开工） |
 | `plans/00-overview.md` | 2026-11-24 | 生效 | 计划拆分总览 |
 | `plans/_template.md` | 2026-11-24 | 生效 | 计划模板 |
-| `plans/plan-w0-repo-bootstrap.md` | 2026-11-24 | 进行中 | W0：仓库与文档体系初始化（当前） |
+| `plans/plan-w0-repo-bootstrap.md` | 2026-11-24 | 已完成 | W0：仓库与文档体系初始化（远程 main = 35a8915） |
 | `decisions/000-template.md` | 2026-11-24 | 生效 | ADR 模板 |
 | `archive/spec-v0.9-raw.md` | 2026-11-24 | 归档 | spec v0.9 原稿 |

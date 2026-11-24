@@ -14,7 +14,7 @@
 
 | 计划 | 对应 spec | 状态 | 计划日期 | 完成日期 | 备注 |
 | --- | --- | --- | --- | --- | --- |
-| [plan-w0-repo-bootstrap.md](plan-w0-repo-bootstrap.md) | §4.1/§7.4/D20/D21 | 进行中 | 2026-11-24 | — | 仓库与文档体系初始化（W1 前置） |
+| [plan-w0-repo-bootstrap.md](plan-w0-repo-bootstrap.md) | §4.1/§7.4/D20/D21 | 已完成 | 2026-11-24 | 2026-11-24 | 仓库与文档体系初始化（W1 前置）；commit 35a8915 |
 | plan-w1-infra-up.md（待创建） | §9 W1 | 未开始 | — | — | docker-compose + 基座跑通 + 读码地图 |
 | plan-w2-repo-skeleton.md（待创建） | §9 W2 / §4 | 未开始 | — | — | 裁剪 + 4 模块骨架 + 生成器四件套 |
 | plan-w3-project-contract.md（待创建） | §9 W3 / §5.1 | 未开始 | — | — | 项目域 + 合同域 + 立项审批 |
