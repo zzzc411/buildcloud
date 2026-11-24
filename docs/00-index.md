@@ -6,46 +6,83 @@
 
 ```
 docs/
-├── 00-index.md               # 本文件：文档总入口与登记表
+├── 00-index.md               # 本文件：文档总入口、版本命名规范、登记表
 ├── spec/                     # 总规格（范围/架构/里程碑的唯一依据）
-│   └── buildcloud-spec-v1.0.md
-├── plans/                    # 从 spec 拆分出的开发计划（按周/按专项）
-│   ├── 00-overview.md        # 拆分总览与状态跟踪
-│   ├── _template.md          # 计划模板（所有计划从这里复制）
-│   └── plan-w{N}-{scope}.md  # 具体计划
+│   └── buildcloud-spec-v1.1.md
+├── plans/                    # 开发计划（从 spec 按周/专项拆分）
+│   ├── 00-overview.md        #   计划总览 + 依赖图 + 状态跟踪
+│   ├── _template.md          #   计划模板（所有计划从这里复制，含 Phase 结构）
+│   ├── _dispatch.md          #   子智能体派发指南（怎么把 Phase 派给 worker）
+│   ├── plan-w{1..8}-*.md     #   周计划（W1-W8 已全部拆分）
+│   └── plan-sp-*.md          #   专项计划（密钥治理/造数/面试弹药库）
 ├── decisions/                # ADR 决策记录（spec §11 之后的新决策）
-├── architecture/             # 架构图、ER 图、读码笔记（W1 起产出）
+├── architecture/             # 架构图、ER 图、读码笔记、专项设计（W1 起产出）
 ├── testing/                  # 压测报告、评测集与测试方案
-├── ops/                      # 部署手册、中间件编排、云服务器上线记录
+├── ops/                      # 部署手册、中间件编排、密钥治理、云服务器上线记录
+├── interview/                # 面试 Q&A 弹药库（sp-interview-qa，W5 起产出）
 └── archive/                  # 历史版本归档（只进不改）
+    ├── spec-v0.9-raw.md
+    └── buildcloud-spec-v1.0.md
 ```
 
 ## 核心文档（必读顺序）
 
 | 顺序 | 文档 | 说明 |
 | --- | --- | --- |
-| 1 | [spec v1.0](spec/buildcloud-spec-v1.0.md) | 项目宪法：范围、架构、里程碑、决策记录 |
-| 2 | [plans/00-overview.md](plans/00-overview.md) | spec 拆分出的计划清单与进度 |
-| 3 | [plans/_template.md](plans/_template.md) | 开发计划的标准结构 |
-| 4 | 根目录 `README.md` | 项目骨架与快速开始 |
-| 5 | 根目录 `AGENTS.md` | 人与智能体共同遵守的开发约束 |
+| 1 | [spec v1.1](spec/buildcloud-spec-v1.1.md) | 项目宪法：范围、架构、里程碑、决策记录 D1-D22 |
+| 2 | [plans/00-overview.md](plans/00-overview.md) | 计划清单、依赖图与进度 |
+| 3 | [plans/_dispatch.md](plans/_dispatch.md) | 子智能体派发指南（整周/单 Phase 派工的操作手册） |
+| 4 | [plans/_template.md](plans/_template.md) | 开发计划的标准结构（Phase 派发单元） |
+| 5 | 根目录 `README.md` | 项目骨架与快速开始 |
+| 6 | 根目录 `AGENTS.md` | 人与智能体共同遵守的开发约束（红线） |
+
+## 版本与命名规范（文档迭代）
+
+**总原则**：仓库内文档分三类，各有不同的迭代方式。
+
+| 类别 | 典型文档 | 迭代方式 | 版本标记 |
+| --- | --- | --- | --- |
+| **规格类**（沉淀型，改历史即失真） | spec、架构/ER 定稿、压测报告、部署手册 | **升版本 + 归档**：新文件 `xxx-v{major}.{minor}.md`，旧版原样移入 `archive/`，文首版本表 + 文末变更记录留痕 | 文件名内 `v{major}.{minor}` |
+| **计划类**（活文档，本来就是工单） | `plan-w*-*.md`、`plan-sp-*.md` | **同文件演进**：状态、任务勾选、进度日志就地更新；仅范围重大变更（如整周砍半）才另立新文件并归档原文件 | 文件头「状态」字段 + 进度日志；**不进文件名** |
+| **参考类**（一次性产出或追加型） | 读码笔记、ADR、目录 README | 新建即定稿，小修就地 edit；ADR **只追加不改写**（废弃改状态为「废弃」并注明取代者） | 无版本号 |
+
+细则：
+
+1. **版本号语义**：`major` = 范围/里程碑/架构级变更（须用户确认，记 Dxx/ADR）；`minor` = 描述修正、路径同步、任务细化等不改承诺的变更；
+2. **阶段型报告不互相覆盖**：压测报告按阶段命名（如 `perf-report-first-round.md` → `perf-report-final.md`），视为不同文档，不算版本迭代；
+3. **归档文件名保持原名**（如 `buildcloud-spec-v1.0.md`）；唯一例外是未按版本命名的 v0.9 原稿（`spec-v0.9-raw.md`）；
+4. **禁止**用「最终版/final2/最新/新」等字样命名；**禁止删除**任何已登记文档；被取代走归档；
+5. **命名前缀**（全小写 kebab-case）：spec / plan-w{N} / plan-sp / adr-{seq} / perf-report / eval / deploy / reading-notes / design / arch- / middleware-…；日期一律 `YYYY-MM-DD`；
+6. **登记即生效**：任何新建/归档/改状态动作，同步更新本文件登记表（一次提交内完成）。
 
 ## 文档规则
 
-1. **单一事实来源**：范围/排期/里程碑只看 spec；spec 变更须升版本号并在 §14 变更记录留痕，旧版归档进 `archive/`；
-2. **计划拆分**：进入某周/某专项开发前，先从 `_template.md` 复制出 `plan-w{N}-{scope}.md`，在其中把 spec 对应章节细化为可执行任务；计划只细化不扩权——**范围变更必须回到 spec**（升版本或记 ADR）；
+1. **单一事实来源**：范围/排期/里程碑只看 spec；spec 变更按上表「规格类」方式升版本，禁止原地静默修改；
+2. **计划拆分**：进入某周/某专项开发前，计划文件已就位（W1-W8 已拆分，见 `plans/00-overview.md`）；后续新增计划从 `_template.md` 复制；**计划只能细化不扩权**——范围变更必须回 spec（升版本）或记 ADR；
 3. **登记制**：新建文档后在本文末尾登记表追加一行（路径、日期、状态）；
-4. **命名**：全小写-连字符（kebab-case）；日期用 `YYYY-MM-DD`；版本号 `v{major}.{minor}`；
-5. **归档**：被取代的文档移入 `archive/`，命名追加 `-raw` 或 `-v{N}` 后缀，不删除；
-6. **语言**：面向自己的工作文档用中文即可，最终对外交付物（README、压测报告）中文为主。
+4. **归档**：被取代的规格类文档移入 `archive/`，不删除；
+5. **语言**：工作文档用中文；对外交付物（README、压测报告）中文为主。
 
 ## 文档登记表
 
 | 路径 | 日期 | 状态 | 说明 |
 | --- | --- | --- | --- |
-| `spec/buildcloud-spec-v1.0.md` | 2026-11-24 | 生效 | 总规格 v1.0（已确认开工） |
-| `plans/00-overview.md` | 2026-11-24 | 生效 | 计划拆分总览 |
-| `plans/_template.md` | 2026-11-24 | 生效 | 计划模板 |
-| `plans/plan-w0-repo-bootstrap.md` | 2026-11-24 | 已完成 | W0：仓库与文档体系初始化（远程 main = 35a8915） |
+| `spec/buildcloud-spec-v1.1.md` | 2026-11-24 | 生效 | 总规格 v1.1（D22：工作区迁移 + 计划体系） |
+| `plans/00-overview.md` | 2026-11-24 | 生效 | 计划总览 + 依赖图（W1-W8 + 3 专项全部拆分） |
+| `plans/_template.md` | 2026-11-24 | 生效（v2 结构） | 计划模板（含 Phase 派发单元） |
+| `plans/_dispatch.md` | 2026-11-24 | 生效 | 子智能体派发指南与提示词模板 |
+| `plans/plan-w0-repo-bootstrap.md` | 2026-11-24 | 已完成 | W0：仓库与文档体系初始化（含工作区迁移同步） |
+| `plans/plan-w1-infra-up.md` | 2026-11-24 | 未开始 | W1：环境与基座跑通（中间件编排/四服务/读码地图） |
+| `plans/plan-w2-repo-skeleton.md` | 2026-11-24 | 未开始 | W2：基座裁剪 + 4 模块骨架 + 生成器四件套 |
+| `plans/plan-w3-project-contract.md` | 2026-11-24 | 未开始 | W3：项目域 + 合同域 + 立项/进度款审批 |
+| `plans/plan-w4-material-v1.md` | 2026-11-24 | 未开始 | W4：材料域 V1 同步链路 + 申领审批闭环 |
+| `plans/plan-w5-concurrent-v2.md` | 2026-11-24 | 未开始 | W5：高并发改造 V2（Lua/事务消息/延迟关单/对账/缓存） |
+| `plans/plan-w6-consistency-report.md` | 2026-11-24 | 未开始 | W6：Seata + 分库分表 + 异步报表 + 首轮压测 |
+| `plans/plan-w7-ai-rag.md` | 2026-11-24 | 未开始 | W7：AI 模块（RAG/SSE/引用溯源/LLM 动态配置） |
+| `plans/plan-w8-final-deploy.md` | 2026-11-24 | 未开始 | W8：终版压测 + 云服务器部署上线 + 收官 |
+| `plans/plan-sp-key-management.md` | 2026-11-24 | 未开始 | 专项：密钥与敏感信息治理（公开仓库硬约束） |
+| `plans/plan-sp-demo-seeding.md` | 2026-11-24 | 未开始 | 专项：造数脚本与演示数据 |
+| `plans/plan-sp-interview-qa.md` | 2026-11-24 | 未开始 | 专项：面试 Q&A 弹药库（长线，W8 定稿） |
 | `decisions/000-template.md` | 2026-11-24 | 生效 | ADR 模板 |
 | `archive/spec-v0.9-raw.md` | 2026-11-24 | 归档 | spec v0.9 原稿 |
+| `archive/buildcloud-spec-v1.0.md` | 2026-11-24 | 归档 | spec v1.0（被 v1.1 取代） |

@@ -53,3 +53,4 @@
 
 - 2026-11-24：spec v1.0 收敛完成；docs 体系（00-index / plans 总览+模板 / ADR 模板）就绪；README、AGENTS.md 编写中。
 - 2026-11-24：git init（main）+ 首次提交 35a8915 + 推送公开仓库成功（ls-remote 验证）；验收清单全勾，计划完成。W0 无遗留，W1（2026-11-30）按 spec §9 开工。
+- 2026-11-24（补充）：W0 完成后发生**工作区迁移**（D22：`D:\project\Engineering Management Platform` → `D:\project\buildcloud`，仓库整体搬迁、远程不变）；spec 升 v1.1 同步全部路径，本计划原文路径引用以 v1.1 为准。
