@@ -1,0 +1,16 @@
+# 统一换行符策略：仓库内 LF，检出按平台自动
+* text=auto
+
+# Windows 脚本保留 CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.docx binary
+*.xlsx binary
+*.jar binary
