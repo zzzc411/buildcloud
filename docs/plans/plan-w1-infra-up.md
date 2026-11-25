@@ -78,3 +78,4 @@
 - 2026-11-25：Phase1（worker w1p1-infra）— 中间件 docker-compose 编排交付（8 容器 + 初始化脚本 + 起停脚本 + docs/ops 两篇）；实测 8/8 healthy、建库/账号/Redis/Nacos/RocketMQ/PG 探针全过、内存约 3.1GB 在限额内；遗留：① MinIO 官方镜像停止匿名分发（Docker Hub 404/quay 401），按 R-4 以 profile 门控待裁决；② 首启数据卷旧密码与 .env 不一致已重置 mysql 卷（无业务数据）；③ .env 本地 UTF-8 不入库。
 - 2026-11-25：Phase3（worker w1p3-notes）— 四篇读码笔记 + 架构图 v0 + ADR-001（RPC=OpenFeign 定稿）交付；发现 spec §3.1 两处与基座现状差异（网关未内置 Sentinel、审批回调走 Spring 事件+HTTP 而非 MQ），已在笔记/架构图标注，待裁决是否升 spec。
 - 2026-11-25（lead）：一阶段验收通过（范围/密钥扫描 0 命中），已提交并推送；Phase 2（基座四服务 + 管理端登录）待用户验收后开工。
+- 2026-11-25（lead）：MinIO 阻塞解除——官方分发全停（Docker Hub 下架 / quay 401 / dl.min.io 410）后改用 bitnamilegacy/minio:latest 归档镜像（S3 健康 200 实测），以 root 运行并纳入默认启动组（9 容器全 healthy）；deploy-local / middleware-limits 同步更新。

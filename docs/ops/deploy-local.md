@@ -22,7 +22,7 @@ Copy-Item docker/.env.template docker/.env
 notepad docker\.env
 # ③ 语法校验（不启动）
 docker compose -f docker/middleware.yaml config -q
-# ④ 一键启动（默认组 8 容器，不含 MinIO——阻塞见 §6；或分批：docker/start-middleware.ps1 -CoreOnly）
+# ④ 一键启动（默认组 9 容器，含 MinIO；或分批：docker/start-middleware.ps1 -CoreOnly）
 docker/start-middleware.ps1
 # ⑤ 等待全部 healthy 后确认
 docker compose -f docker/middleware.yaml ps
@@ -41,14 +41,12 @@ docker compose -f docker/middleware.yaml ps
 
 | 动作 | 命令 |
 | --- | --- |
-| 全量启动（默认组 8 容器，不含 MinIO） | `docker/start-middleware.ps1` |
-| 追加 MinIO（镜像可用后） | `docker/start-middleware.ps1 -WithMinio` |
-| 只起基础层（mysql/redis/nacos） | `docker/start-middleware.ps1 -CoreOnly` |
+| 全量启动（默认组 9 容器，含 MinIO） | `docker/start-middleware.ps1` |
 | 追加某批组件 | `docker compose -f docker/middleware.yaml up -d <服务名...>`（见 limits §3） |
 | 停止（保留数据） | `docker/stop-middleware.ps1` |
 | 停止并清空数据卷【不可逆】 | `docker/stop-middleware.ps1 -Purge` |
 
-服务名：`mysql redis nacos rocketmq-namesrv rocketmq-broker seata-server xxl-job-admin postgres`；`minio` 为 profile 门控服务（`--profile minio`）。
+服务名：`mysql redis nacos rocketmq-namesrv rocketmq-broker seata-server xxl-job-admin postgres minio`。
 
 ## 4. 端口表（默认值，全部绑定 127.0.0.1）
 
@@ -61,7 +59,7 @@ docker compose -f docker/middleware.yaml ps
 | RocketMQ Broker | 10911 | 10911 | 本地单机；`brokerIP1=127.0.0.1` 供宿主机客户端直连 |
 | Seata Server | 8091 / 7091 | 同左 | TC 服务 / 控制台（默认账号 seata/seata，官方出厂值，仅本机） |
 | XXL-Job-Admin | 8080 | **9090** | 控制台 http://127.0.0.1:9090/xxl-job-admin （与基座 dev 配置对齐；默认 admin/123456，**接入业务前请改密**） |
-| MinIO | 9000 / 9001 | 同左 | S3 API / 控制台（账号在 `docker/.env`）；⚠ **profile 门控，默认不启动**（镜像阻塞见 §6） |
+| MinIO | 9000 / 9001 | 同左 | S3 API / 控制台（账号在 `docker/.env`）；**默认随组启动**（镜像来源见 §6） |
 | PostgreSQL | 5432 | 5432 | W7 向量库（pgvector），库 `buildcloud_ai`（可改） |
 
 ## 5. 健康验证（各组件原生探针，均已实测）
@@ -74,6 +72,7 @@ docker exec bc-redis redis-cli ping                              # PONG（密码
 docker exec bc-nacos curl -s -o NUL -w '%{http_code}' http://127.0.0.1:8848/nacos/v3/admin/core/state   # 200
 docker exec bc-rmq-namesrv sh mqadmin clusterList -n 127.0.0.1:9876   # 看到 broker-a @ 127.0.0.1:10911 即注册成功
 docker exec bc-postgres pg_isready -U buildcloud                 # accepting connections
+docker exec bc-minio curl -fsS http://127.0.0.1:9000/minio/health/live   # 退出码 0 即正常（2026-11-25 实测）
 # 控制台类：Nacos http://127.0.0.1:8080 / MinIO(启用后) http://127.0.0.1:9001 /
 #           XXL-Job http://127.0.0.1:9090/xxl-job-admin / Seata http://127.0.0.1:7091
 ```
@@ -86,7 +85,7 @@ docker exec bc-postgres pg_isready -U buildcloud                 # accepting con
 | 端口被占用（如本机已装 MySQL/Redis） | 改 `docker/.env` 对应 `*_HOST_PORT` 后 `docker compose up -d` 重跑；基座服务侧同步改（Phase 2 用 `application-local.yaml` 覆盖）。本机实测：3306 被本地 `mysqld`、6379 被本地 `redis-server`（均为 Windows 服务）占用，MySQL/Redis 已分别默认映射 **13306/16379**；报告「forbidden by its access permissions」时优先查 `netsh interface ipv4 show excludedportrange protocol=tcp` 与 `Get-NetTCPConnection -LocalPort <端口>` |
 | Docker Desktop 起不来 / `docker info` 报错 | 重启 Docker Desktop；仍失败再 `wsl --shutdown` 后重启（会影响其它 WSL 实例，先确认无重要进程） |
 | 容器反复重启 / OOM | `docker logs <容器>` 排查；对照 middleware-limits.md 检查是否自行调小过限额；必要时分批启动 |
-| MinIO 拉取失败 | **2026-11-25 实测阻塞**：MinIO 已停止官方镜像匿名分发——Docker Hub `minio/minio` 仓库 404；`quay.io/minio/minio` 匿名 401（`latest`/`RELEASE.2025-09-06T17-38-46Z`/`RELEASE.2025-09-07T16-13-09Z` 实测均拒）；`ghcr.io` 无公开镜像。技术选型仍按 spec §3.3 保留 MinIO，服务以 profile `minio` 门控。待主控裁决：① 官方/镜像源恢复后启用；② 提供注册表凭据或私有构建镜像；③ 经 ADR 决议替换方案。**本 Phase 未擅自变更存储组件（R-4）。** |
+| MinIO 镜像来源（官方分发已停） | 2026-11-25 实测：MinIO 官方已停止镜像与二进制匿名分发——Docker Hub `minio/minio` 404、quay.io 401、`dl.min.io` 410。改用 **`bitnamilegacy/minio:latest`**（Bitnami 归档镜像，匿名可拉取；内置 MinIO DEVELOPMENT.2025-05-24、S3 健康 200 实测通过），已默认纳入启动组（容器以 `user: "0:0"` 运行——数据卷由 Docker 创建为 root:root，镜像默认用户 1001 无写权限）。**升级路径（须记 ADR）**：① 使用登记过的镜像仓库/私有构建；② 经 ADR 替换存储组件。镜像停留在 2025-05 归档版本，安全补丁需关注。 |
 | Nacos 启动报 `env NACOS_AUTH_TOKEN must be set with Base64 String.` | Nacos v3 入口脚本强制要求三个鉴权占位变量（即使 `NACOS_AUTH_ENABLE=false`）：在 `docker/.env` 填 `NACOS_AUTH_TOKEN`（32 字节以上字符串的 Base64）/`NACOS_AUTH_IDENTITY_KEY`/`NACOS_AUTH_IDENTITY_VALUE`（模板已给占位示例，2026-11-25 实测通过） |
 | RocketMQ Broker 反复重启，日志只有 `ScheduleMessageService ... NullPointerException` | 原因：apache/rocketmq 镜像未预建 `/home/rocketmq/logs`、`/home/rocketmq/store`，挂载命名卷后属主 root，默认用户 rocketmq(uid 3000) 无写权限 → `initialize()` 失败。已通过 `docker/rocketmq/Dockerfile` 预建目录并授权解决；若从旧版编排迁移，先 `docker compose down` 再删除空的 `buildcloud_broker-logs/buildcloud_broker-store/buildcloud_namesrv-logs` 卷后重建 |
 | Broker 连不上（宿主机客户端） | 确认 `docker/rocketmq/conf/broker.conf` 的 `brokerIP1=127.0.0.1` 未被改动；`docker logs bc-rmq-broker` 看 namesrvAddr 是否解析 |
@@ -105,7 +104,7 @@ docker exec bc-postgres pg_isready -U buildcloud                 # accepting con
 | RocketMQ | `buildcloud-rocketmq:5.3.1-local`（`FROM apache/rocketmq:5.3.1`） | 基座 README 框架版本表 5.3.1（rocketmq-spring 2.3.6 客户端）；本地 Dockerfile 仅预建 logs/store 目录并授权（见 §6），不改任何组件版本 |
 | Seata | `apache/seata-server:2.5.0.jdk17` | 基座 README 框架版本表 2.5.0；jdk17 tag 与项目 JDK 17 基线一致 |
 | XXL-Job | `xuxueli/xxl-job-admin:2.4.0` | 基座 README 框架版本表 2.4.0；建表 SQL 取自同名官方 tag |
-| MinIO | `quay.io/minio/minio:RELEASE.2025-09-06T17-38-46Z` | spec §3.3 保留 MinIO 选型；⚠ 该镜像 2026-11-25 起无法匿名获取（Docker Hub 404、quay 401、ghcr 无），以 profile `minio` 门控，见 §6 阻塞记录 |
+| MinIO | `bitnamilegacy/minio:latest`（内置 MinIO DEVELOPMENT.2025-05-24） | spec §3.3 保留 MinIO 选型；官方分发停止（2026-10 起 Docker Hub 下架），改用 Bitnami 归档镜像，2026-11-25 实测 S3 健康 200；升级路径见 §6 |
 | PostgreSQL+pgvector | `pgvector/pgvector:0.8.7-pg17` | spec §3.3（Spring AI + pgvector）；官方 pgvector 镜像 0.8.7 / PG17 组合 |
 
 > 依据核对时间：2026-11-25（Docker Hub / quay tag 列表 + 基座参考克隆 `D:\project\yudao-cloud-ref` 只读核对）。

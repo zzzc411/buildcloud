@@ -235,15 +235,18 @@ services:
       retries: 30
       start_period: 90s
 
-  # MinIO：文件存储（基座默认对象存储）。⚠ 2026-11-25 官方镜像已停止匿名分发
-  # （Docker Hub 404 / quay 401 / ghcr denied，详见文件头阻塞记录），故以 profile
-  # 「minio」门控：默认 `up -d` 不包含本服务，镜像可用后执行
-  # `docker compose --profile minio up -d minio` 启用。
+  # MinIO：文件存储（基座默认对象存储）。
+  # 2026-11-25 官方分发已停止匿名获取（Docker Hub 下架 / quay 401 / dl.min.io 410），
+  # 经实测改用 bitnamilegacy/minio:latest（Bitnami 归档镜像，匿名可拉取，内置
+  # MinIO DEVELOPMENT.2025-05-24 + mc + curl，S3 健康探针 200 实测通过）；
+  # 镜像停留在归档版本，长期升级路径见 docs/ops/deploy-local.md §6。
   minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-06T17-38-46Z
-    profiles: ["minio"]
+    image: bitnamilegacy/minio:latest
     container_name: bc-minio
     restart: unless-stopped
+    # 数据卷由 Docker 创建为 root:root，镜像默认用户 1001 无写权限（2026-11-25 实测），
+    # 本地开发中间件以 root 运行；如需非 root，可在宿主机 chown 1001 后移除本行
+    user: "0:0"
     command: server /data --console-address ":9001"
     environment:
       <<: *tz
@@ -256,8 +259,8 @@ services:
       - minio-data:/data
     mem_limit: 512m
     healthcheck:
-      # mc ready local：MinIO 官方仓库 compose 的标准探针（镜像内已移除 curl）
-      test: ["CMD", "mc", "ready", "local"]
+      # bitnami 镜像含 curl；S3 live 探针（2026-11-25 实测 200）
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 12
