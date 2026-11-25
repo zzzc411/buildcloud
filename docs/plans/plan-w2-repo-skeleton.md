@@ -4,7 +4,7 @@
 | --- | --- |
 | 计划编号 | plan-w2-repo-skeleton |
 | 对应 spec 章节 | §4（裁剪方案全部）、§9 W2、D16/D17 |
-| 状态 | 未开始 |
+| 状态 | 进行中（P1 ✅ / P2-P4 待做） |
 | 计划开始 | 2026-12-07（周一） |
 | 计划完成 | 2026-12-13（周末，打 tag `w2`） |
 | 前置依赖 | plan-w1-infra-up（✅ 环境、登录、读码地图就位）；plan-sp-key-management（∥ 并行推进，P2 裁剪时必须落地其规范） |
@@ -23,9 +23,20 @@
 | 工作量 | 1d |
 | 任务 | clone yudao-cloud master-jdk17 → 拷入本仓库根（保留 LICENSE 与来源注明）；`yudao-module-ai` 保留源码但从构建摘除（D12，设计参考）；提交历史从本次拷入开始（全新历史，D1） |
 | 交付物 | 仓库含完整基座源码（未删模块前）+ 根 README「基座来源」注明；`mvn clean package -DskipTests` 全量编译通过（基座原样） |
-| 验收标准 | [ ] 编译通过；[ ] LICENSE 与来源注明就位；[ ] 提交不含任何密钥（基座默认配置先行模板化标记，细做在 Phase 2） |
+| 验收标准 | [x] `mvn clean package -DskipTests` 全量编译通过（85 模块，10m23s，2026-11-25 实测）；[x] LICENSE 与来源注明就位（根 `LICENSE` + README「基座来源与许可证」表：仓库/分支/commit=`8af49f7`/入仓方式）；[x] 提交不含本项目真实密钥（docker/.env 值、本机端口 13306/16379、本机内网 IP 扫描 0 命中）；上游公开 demo 默认值（`123456`、`${OPENAI_API_KEY:sk-xxxx}` 等占位/演示值）按 spec §4.3.8 在 P2 由 sp-key Phase 1 统一模板化 |
 | 上下文包（必读） | spec §4.1/§4.2/§11 D12-D14；基座根 pom 的 modules 列表 |
-| 状态 | ☐ |
+| 状态 | ✅（2026-11-25） |
+
+**P1 落地记录（2026-11-25）**
+
+- 来源：`https://github.com/YunaiV/yudao-cloud` 分支 `master-jdk17`，HEAD `8af49f7ce59d44c45289ea267d74fd12b305b1cf`（2026-11-23），经 `git archive` 冻结快照拷入，**不引入上游 Git 历史**（D1）；工作分支 `feature/w2-skeleton`。
+- 入仓范围：根 `pom.xml`、`lombok.config`、`LICENSE`、`yudao-dependencies`、`yudao-framework`、`yudao-gateway`、`yudao-server`、`yudao-module-*` 全部 22 个业务模块（含待删的 15 个与仅作参考的 `yudao-module-ai`）、`sql/`、`script/`。
+- 未入仓（有意剔除）：上游 `.git/`、`.gitee/`、`.github/`（避免沿用上游 CI 触达本仓库 Secrets）、`.image/`（上游 README 示意图，本仓库 README 已重写）、根 `README.md`（本仓库自有）、`.gitignore`/`.gitattributes`（按本项目规则合并）。
+- 构建摘除：根 `pom.xml` 的 `<modules>` 移除 `yudao-module-ai`（D12，源码保留作 RAG 设计参考）。
+- 配置例外：`**/application-local.yaml`（24 份）按 R-1 继续由 `.gitignore` 排除（本地真实值只留在工作区，P2 提供 `*-template.yaml`）。
+- 编译验证：`JAVA_HOME=D:\project\tools\jdk-17.0.21.1+2` + `mvn clean package -DskipTests` → **BUILD SUCCESS，85 模块，10m23s**（日志 `D:\project\svc-logs\w2-p1-build.log`）。
+- **P2 前置（因 GitHub push protection 阻断而提前）**：上游示例数据含云厂商 Key 形态串（`infra_file_config` 示例 S3 配置、`system_sms_channel` 示例短信通道、`yudao-module-ai` 单测内嵌 Key），首次 push 被 GitHub 拒绝。处置：① 按 spec §4.3.3 删除非 MySQL 方言 SQL 目录（db2/dm/highgo/kingbase/oceanbase/opengauss/oracle/postgresql/sqlserver，`sql/` 只留 `mysql/` + `tools/`，上游可随时再取）；② `sql/mysql/ruoyi-vue-pro.sql` 演示 AccessKey 改为 `DEMO_REDACTED_*` 占位；③ `yudao-module-ai` 单测内嵌 Key 改占位符（该模块不参与构建，不影响编译）。索引层复扫 `AKID/LTAI/AKLT/sk-` 形态 0 命中。此条属 R-1 红线合规，非范围扩张（删方言目录本就是 P2 任务）。
+
 
 ### Phase 2：删 15 模块及连带引用（含密钥模板化）
 
@@ -89,3 +100,4 @@
 ## 6. 进度日志（追加式，一行/次）
 
 - 2026-11-24：计划创建（自 spec §9 W2 / §4 拆分）。
+- 2026-11-25：**P1 完成** — 基座 `master-jdk17` @ `8af49f7` 冻结快照入仓（`feature/w2-skeleton`）：22 个业务模块 + framework/gateway/server/dependencies + sql/script 就位；根 pom 摘除 `yudao-module-ai`（D12）；24 份 `application-local.yaml` 按 R-1 不入库；`mvn clean package -DskipTests` 85 模块 BUILD SUCCESS（10m23s）；README 增「基座来源与许可证」表并更新 W2 状态。下一步：P2 删 15 模块 + 网关路由/菜单/SQL 连带清理 + 配置模板化（联动 sp-key P1），目标 `mvn clean package -DskipTests` 仍通过且密钥扫描 0 命中。

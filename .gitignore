@@ -50,3 +50,8 @@ Thumbs.db
 # ---- 其他 ----
 *.swp
 *.bak
+*.versionsBackup
+rebel.xml
+nbproject/
+# Maven flatten 插件生成的产物（基座引入后产生）
+.flattened-pom.xml

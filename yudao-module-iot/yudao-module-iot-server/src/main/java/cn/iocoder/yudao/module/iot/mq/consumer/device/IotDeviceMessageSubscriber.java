@@ -1,0 +1,122 @@
+package cn.iocoder.yudao.module.iot.mq.consumer.device;
+
+import cn.hutool.core.date.LocalDateTimeUtil;
+import cn.hutool.core.util.ObjectUtil;
+import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
+import cn.iocoder.yudao.module.iot.core.enums.IotDeviceMessageMethodEnum;
+import cn.iocoder.yudao.module.iot.core.enums.device.IotDeviceStateEnum;
+import cn.iocoder.yudao.module.iot.core.messagebus.core.IotMessageBus;
+import cn.iocoder.yudao.module.iot.core.messagebus.core.IotMessageSubscriber;
+import cn.iocoder.yudao.module.iot.core.mq.message.IotDeviceMessage;
+import cn.iocoder.yudao.module.iot.core.util.IotDeviceMessageUtils;
+import cn.iocoder.yudao.module.iot.dal.dataobject.device.IotDeviceDO;
+import cn.iocoder.yudao.module.iot.service.device.IotDeviceService;
+import cn.iocoder.yudao.module.iot.service.device.message.IotDeviceMessageService;
+import cn.iocoder.yudao.module.iot.service.device.property.IotDevicePropertyService;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
+import java.time.LocalDateTime;
+import java.util.Objects;
+
+/**
+ * 针对 {@link IotDeviceMessage} 的业务处理器：调用 method 对应的逻辑。例如说：
+ * 1. {@link IotDeviceMessageMethodEnum#PROPERTY_POST} 属性上报时，记录设备属性
+ *
+ * @author alwayssuper
+ */
+@Component
+@Slf4j
+public class IotDeviceMessageSubscriber implements IotMessageSubscriber<IotDeviceMessage> {
+
+    @Resource
+    private IotDeviceService deviceService;
+    @Resource
+    private IotDevicePropertyService devicePropertyService;
+    @Resource
+    private IotDeviceMessageService deviceMessageService;
+
+    @Resource
+    private IotMessageBus messageBus;
+
+    @PostConstruct
+    public void init() {
+        messageBus.register(this);
+    }
+
+    @Override
+    public String getTopic() {
+        return IotDeviceMessage.MESSAGE_BUS_DEVICE_MESSAGE_TOPIC;
+    }
+
+    @Override
+    public String getGroup() {
+        return "iot_device_message_consumer";
+    }
+
+    @Override
+    public void onMessage(IotDeviceMessage message) {
+        if (!IotDeviceMessageUtils.isUpstreamMessage(message)) {
+            log.error("[onMessage][message({}) 非上行消息，不进行处理]", message);
+            return;
+        }
+
+        TenantUtils.execute(message.getTenantId(), () -> {
+            // 1.1 更新设备的最后时间
+            // 设备已删除时（例如删除时消息仍在途），跳过处理，避免消息不断重投：https://github.com/YunaiV/ruoyi-vue-pro/issues/1271
+            IotDeviceDO device = deviceService.getDeviceFromCache(message.getDeviceId());
+            if (device == null) {
+                log.warn("[onMessage][message({}) 对应的设备不存在，忽略处理]", message);
+                return;
+            }
+            // 特殊：离线消息不算活跃，也不改变连接的 server，避免旧连接的离线把路由改回旧节点
+            boolean spooled = IotDeviceMessageUtils.isSpooled(message);
+            if (spooled) {
+                // 特殊：补传的消息（网关离线暂存），按网关接收时刻只增不减地更新最后时间：很旧的消息不会让设备显得刚刚活跃，
+                // 清积压期间刚收到的消息仍然保持活跃；不改路由，也不强制上线（在线状态由之后的实时消息恢复）
+                devicePropertyService.updateDeviceReportTimeIfLaterAsync(device.getId(),
+                        LocalDateTimeUtil.of(IotDeviceMessageUtils.getSpoolTimeNotAfterNow(message)));
+            } else if (!IotDeviceMessageUtils.isStateOffline(message)) {
+                devicePropertyService.updateDeviceReportTimeAsync(device.getId(), LocalDateTime.now());
+                // 1.2 更新设备的连接 server：早于当前上线时间的旧消息，不改路由
+                if (device.getOnlineTime() == null || message.getReportTime() == null
+                        || !message.getReportTime().isBefore(device.getOnlineTime())) {
+                    devicePropertyService.updateDeviceServerIdAsync(device.getId(), message.getServerId());
+                }
+            }
+
+            // 2. 未上线的设备，强制上线
+            if (!spooled) {
+                forceDeviceOnline(message, device);
+            }
+
+            // 3. 核心：处理消息
+            deviceMessageService.handleUpstreamDeviceMessage(message, device);
+        });
+    }
+
+    private void forceDeviceOnline(IotDeviceMessage message, IotDeviceDO device) {
+        // 已经在线，无需处理
+        if (ObjectUtil.equal(device.getState(), IotDeviceStateEnum.ONLINE.getState())) {
+            return;
+        }
+        // 如果是 STATE 相关的消息，无需处理，不然就重复处理状态了
+        if (Objects.equals(message.getMethod(), IotDeviceMessageMethodEnum.STATE_UPDATE.getMethod())) {
+            return;
+        }
+
+        // 特殊：设备非在线时，主动标记设备为在线
+        // 为什么不直接更新状态呢？因为通过 IotDeviceMessage 可以经过一系列的处理，例如说记录日志、规则引擎等等
+        // 事件时间沿用源消息的上报时间：迟到的旧消息（早于离线）不会把设备重新拉上线
+        try {
+            deviceMessageService.sendDeviceMessage(IotDeviceMessage.buildStateUpdateOnline(), device,
+                    null, message.getReportTime());
+        } catch (Exception e) {
+            // 注意：即使执行失败，也不影响主流程
+            log.error("[forceDeviceOnline][message({}) device({}) 强制设备上线失败]", message, device, e);
+        }
+    }
+
+}
