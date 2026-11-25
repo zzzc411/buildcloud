@@ -72,7 +72,7 @@ docs/
 | `plans/_template.md` | 2026-11-24 | 生效（v2 结构） | 计划模板（含 Phase 派发单元） |
 | `plans/_dispatch.md` | 2026-11-24 | 生效 | 子智能体派发指南与提示词模板 |
 | `plans/plan-w0-repo-bootstrap.md` | 2026-11-24 | 已完成 | W0：仓库与文档体系初始化（含工作区迁移同步） |
-| `plans/plan-w1-infra-up.md` | 2026-11-24 | 未开始 | W1：环境与基座跑通（中间件编排/四服务/读码地图） |
+| `plans/plan-w1-infra-up.md` | 2026-11-24 | 进行中 | W1：环境与基座跑通（P1/P3 ✅ 2026-11-25；P2 待做） |
 | `plans/plan-w2-repo-skeleton.md` | 2026-11-24 | 未开始 | W2：基座裁剪 + 4 模块骨架 + 生成器四件套 |
 | `plans/plan-w3-project-contract.md` | 2026-11-24 | 未开始 | W3：项目域 + 合同域 + 立项/进度款审批 |
 | `plans/plan-w4-material-v1.md` | 2026-11-24 | 未开始 | W4：材料域 V1 同步链路 + 申领审批闭环 |
@@ -82,7 +82,16 @@ docs/
 | `plans/plan-w8-final-deploy.md` | 2026-11-24 | 未开始 | W8：终版压测 + 云服务器部署上线 + 收官 |
 | `plans/plan-sp-key-management.md` | 2026-11-24 | 未开始 | 专项：密钥与敏感信息治理（公开仓库硬约束） |
 | `plans/plan-sp-demo-seeding.md` | 2026-11-24 | 未开始 | 专项：造数脚本与演示数据 |
-| `plans/plan-sp-interview-qa.md` | 2026-11-24 | 未开始 | 专项：面试 Q&A 弹药库（长线，W8 定稿） |
+| `plans/plan-sp-interview-qa.md` | 2026-11-24 | 进行中 | 专项：面试 Q&A 弹药库（P1 ✅ v0.1；八章待 W5-W7 填充） |
+| `decisions/001-rpc-mode.md` | 2026-11-25 | 生效 | ADR-001：服务间 RPC=Spring Cloud OpenFeign（W1-P3 定稿） |
+| `architecture/arch-overview-v0.md` | 2026-11-25 | 生效 | 架构图 v0（读码定稿版，含与 spec §3.1 差异标注） |
+| `architecture/reading-notes-gateway.md` | 2026-11-25 | 生效 | 网关鉴权链路读码笔记 |
+| `architecture/reading-notes-rpc.md` | 2026-11-25 | 生效 | 服务间 RPC 读码笔记 |
+| `architecture/reading-notes-bpm-integration.md` | 2026-11-25 | 生效 | BPM 集成模式读码笔记（W3/W4 复刻清单） |
+| `architecture/reading-notes-starter.md` | 2026-11-25 | 生效 | starter 体系读码笔记（自研引用建议） |
+| `ops/deploy-local.md` | 2026-11-25 | 生效 | 本地部署手册 v1（中间件编排与起停） |
+| `ops/middleware-limits.md` | 2026-11-25 | 生效 | 中间件内存限额表与分批启动建议 |
+| `interview/qa-bank.md` | 2026-11-25 | 生效 | 面试弹药库 v0.1（九章框架 + 二次开发叙事章） |
 | `decisions/000-template.md` | 2026-11-24 | 生效 | ADR 模板 |
 | `archive/spec-v0.9-raw.md` | 2026-11-24 | 归档 | spec v0.9 原稿 |
 | `archive/buildcloud-spec-v1.0.md` | 2026-11-24 | 归档 | spec v1.0（被 v1.1 取代） |

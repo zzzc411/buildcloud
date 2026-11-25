@@ -51,6 +51,7 @@ spec v1.1（范围与排期唯一依据）
 
 | 窗口 | 可并行内容 | 前提 |
 | --- | --- | --- |
+| W1 周内 | 中间件编排（P1）∥ 读码地图（P3） | 文件集不相交；P3 依赖基座参考克隆 `D:\project\yudao-cloud-ref`（已就绪） |
 | W2 周内 | 裁剪（P2-P4）∥ 密钥治理专项 | 文件集不相交（配置模板 vs 模块骨架） |
 | W3 周内 | 项目域 CRUD ∥ 合同域 CRUD（两子包） | 分包隔离，无共享文件 |
 | W5 周内 | 申领链路（P1-P4、P6）∥ 防护组件（P5） | P5 只碰网关/缓存组件 |
@@ -61,7 +62,7 @@ spec v1.1（范围与排期唯一依据）
 
 | 计划 | 周次（日期） | 前置依赖 | Phase 数 | 状态 | 完成 |
 | --- | --- | --- | --- | --- | --- |
-| [plan-w1-infra-up.md](plan-w1-infra-up.md) | W1（11-30 ~ 12-06） | W0 ✅ | 3 | 未开始 | — |
+| [plan-w1-infra-up.md](plan-w1-infra-up.md) | W1（11-30 ~ 12-06） | W0 ✅ | 3 | 进行中（P1/P3 ✅，P2 待做） | — |
 | [plan-w2-repo-skeleton.md](plan-w2-repo-skeleton.md) | W2（12-07 ~ 12-13） | W1；∥ sp-key | 4 | 未开始 | — |
 | [plan-w3-project-contract.md](plan-w3-project-contract.md) | W3（12-14 ~ 12-20） | W2 | 5（P2∥P3） | 未开始 | — |
 | [plan-w4-material-v1.md](plan-w4-material-v1.md) | W4（12-21 ~ 12-27） | W3 | 6 | 未开始 | — |
@@ -79,7 +80,7 @@ spec v1.1（范围与排期唯一依据）
 | --- | --- | --- | --- | --- |
 | [plan-sp-key-management.md](plan-sp-key-management.md) | W2 周内（规范先行） | W2-P1 | 未开始 | 此后长期执行；W7 依赖其 Key 方案 |
 | [plan-sp-demo-seeding.md](plan-sp-demo-seeding.md) | W3 后启动 | W3/W4/W5 | 未开始 | **W6-P5 压测前必须完成**（硬时间点） |
-| [plan-sp-interview-qa.md](plan-sp-interview-qa.md) | W5 起长线积累 | 各专项产出 | 未开始 | W8 定稿；数字只引自压测报告 |
+| [plan-sp-interview-qa.md](plan-sp-interview-qa.md) | W5 起长线积累 | 各专项产出 | 进行中（P1 ✅ v0.1 框架） | W8 定稿；数字只引自压测报告 |
 
 ## 6. 使用方式（主控视角）
 
@@ -94,7 +95,7 @@ spec v1.1（范围与排期唯一依据）
 | 周 | 计划 | 状态 | Phase 完成/总数 | 备注 |
 | --- | --- | --- | --- | --- |
 | W0 | repo-bootstrap | ✅ 已完成 | 7/7 | 2026-11-24；含 D22 迁移同步 |
-| W1 | infra-up | ⬜ 未开始 | 0/3 | 2026-11-30 开工 |
+| W1 | infra-up | 🔄 进行中 | 2/3 | P1/P3 完成（2026-11-25 提前启动）；P2 待做；MinIO 镜像阻塞待裁决 |
 | W2 | repo-skeleton | ⬜ 未开始 | 0/4 | ∥ sp-key |
 | W3 | project-contract | ⬜ 未开始 | 0/5 | P2∥P3 |
 | W4 | material-v1 | ⬜ 未开始 | 0/6 | |
