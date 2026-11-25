@@ -100,4 +100,5 @@
 ## 6. 进度日志（追加式，一行/次）
 
 - 2026-11-24：计划创建（自 spec §9 W2 / §4 拆分）。
+- 2026-11-26：**P1 已推送远端** — `feature/w2-skeleton` @ `bef2530`（GitHub 校验 9605 个文件，LICENSE/README/docs 齐备；本地分支已设 upstream 跟踪）。首次 push 被 GitHub push protection 拦截（上游多方言 SQL 含演示云 Key 形态串），按 spec §4.3.3 先删 9 个非 MySQL 方言 SQL 目录、MySQL 脚本演示 AccessKey 改 `DEMO_REDACTED_*`、`yudao-module-ai` 单测 Key 改占位符后复推通过（详见 P1 落地记录「P2 前置」条）。P2 正由 worker `w2p2-trim` 并行执行。
 - 2026-11-25：**P1 完成** — 基座 `master-jdk17` @ `8af49f7` 冻结快照入仓（`feature/w2-skeleton`）：22 个业务模块 + framework/gateway/server/dependencies + sql/script 就位；根 pom 摘除 `yudao-module-ai`（D12）；24 份 `application-local.yaml` 按 R-1 不入库；`mvn clean package -DskipTests` 85 模块 BUILD SUCCESS（10m23s）；README 增「基座来源与许可证」表并更新 W2 状态。下一步：P2 删 15 模块 + 网关路由/菜单/SQL 连带清理 + 配置模板化（联动 sp-key P1），目标 `mvn clean package -DskipTests` 仍通过且密钥扫描 0 命中。
