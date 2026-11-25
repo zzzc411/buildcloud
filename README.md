@@ -11,7 +11,7 @@
 
 ## 项目状态
 
-**规划完成，W1-W8 计划已全部拆分（见 [docs/plans/00-overview.md](docs/plans/00-overview.md)），代码未动工。** 业务代码自 2026-11-30（W1）起按周推进；计划可整周派发给子智能体执行（派发规则见 [docs/plans/_dispatch.md](docs/plans/_dispatch.md)）。
+**W1 已完成（2026-11-25）：中间件 9 容器 + 基座四服务（gateway/system/infra/bpm）本地跑通，管理端可登录（admin/admin123）。** 详见 [docs/ops/deploy-local.md](docs/ops/deploy-local.md)；当前处于 W2 开工前（裁剪 + 自研骨架），计划见 [docs/plans/00-overview.md](docs/plans/00-overview.md)。
 
 > **关于二次开发（诚信声明）**：本项目基于开源微服务基座 [yudao-cloud](https://github.com/YunaiV/yudao-cloud)（master-jdk17 分支，MIT 协议）裁剪二次开发——用户/权限/工作流等通用能力来自基座；**六个建筑业务域（项目/合同/材料/审批/报表/AI）、高并发申领链路、RAG 知识库、部署上线**为自研设计与实现。
 
@@ -96,7 +96,7 @@ cd buildcloud
 | 周 | 目标 | 状态 |
 | --- | --- | --- |
 | W0 | 仓库与文档体系初始化（本阶段） | ✅ 完成（2026-11-24） |
-| W1 | Docker 编排中间件 + 基座跑通 + 读码地图 | ⬜ |
+| W1 | Docker 编排中间件 + 基座跑通 + 读码地图 | ✅ 完成（2026-11-25） |
 | W2 | 基座裁剪 + 4 个自研模块骨架 + 代码生成器四件套 | ⬜ |
 | W3 | 项目域 + 合同域 + 立项审批流 | ⬜ |
 | W4 | 材料域 V1（同步链路）+ 申领审批闭环 | ⬜ |

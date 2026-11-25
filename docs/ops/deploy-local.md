@@ -77,7 +77,76 @@ docker exec bc-minio curl -fsS http://127.0.0.1:9000/minio/health/live   # 退�
 #           XXL-Job http://127.0.0.1:9090/xxl-job-admin / Seata http://127.0.0.1:7091
 ```
 
-## 6. 常见问题
+## 6. 基座服务启动（Phase 2，2026-11-25 实测）
+
+> 前置：中间件 **mysql/redis/nacos/rocketmq-namesrv+broker** 必须运行（`yudao-spring-boot-starter-mq` 启动期即创建 Producer，缺 namesrv 直接失败）；xxl-job/seata/postgres/minio 在 local profile 下不需要，可停掉省约 1.5GB。
+
+### 6.1 JDK / Maven
+
+- JDK **17**（master-jdk17 基线）：本机 PATH 默认为 JDK 21，17 安装在 `D:\project\tools\jdk-17.0.21.1+2`，构建/启动前显式设置 `JAVA_HOME`；
+- Maven 3.9.1：`mvn -v` 可查。
+
+### 6.2 数据库准备（bc-mysql:13306，库 `ruoyi-vue-pro`）
+
+| 脚本 | 来源 | 说明 |
+| --- | --- | --- |
+| `ruoyi-vue-pro.sql` | 基座仓库 `sql/mysql/`（参考克隆 `D:\project\yudao-cloud-ref\sql\mysql\`） | 48 张 system_/infra_ 表 + 初始数据 |
+| `bpm.sql` | 芋道星球附件 `bpm-2025-03-15`（**仅本地使用；公开仓库嵌入前须评估授权**） | 8 张 bpm_ 表；其中 2 表带数据（definition_info 250 条、expression 2 条），category/form/user_group 为空 |
+| `bpm-alter`（见下） | 由当前 DO 与 2025-03 版差异推出 | bpm 启动前必须补 7 列 |
+
+导入（容器内 mysql 客户端 + UTF-8）：
+
+```powershell
+docker cp <sql文件> bc-mysql:/tmp/x.sql
+docker exec bc-mysql sh -c 'mysql -uroot -p<PWD> --default-character-set=utf8mb4 ruoyi-vue-pro < /tmp/x.sql'
+```
+
+补齐列（以当前 DO 为准，`allow_withdraw_task` 默认 b'0' 与 `BpmTaskServiceImpl` 的 `Boolean.TRUE` 判定一致）：
+
+```sql
+ALTER TABLE `bpm_process_definition_info`
+  ADD COLUMN `start_dept_ids` varchar(500) NULL DEFAULT NULL COMMENT '可发起部门编号数组' AFTER `start_user_ids`,
+  ADD COLUMN `allow_withdraw_task` bit(1) NOT NULL DEFAULT b'0' COMMENT '是否允许审批人撤回任务' AFTER `allow_cancel_running_process`,
+  ADD COLUMN `process_before_trigger_setting` text NULL DEFAULT NULL COMMENT '流程前置触发配置' AFTER `summary_setting`,
+  ADD COLUMN `process_after_trigger_setting` text NULL DEFAULT NULL COMMENT '流程后置触发配置' AFTER `process_before_trigger_setting`,
+  ADD COLUMN `task_before_trigger_setting` text NULL DEFAULT NULL COMMENT '任务前置触发配置' AFTER `process_after_trigger_setting`,
+  ADD COLUMN `task_after_trigger_setting` text NULL DEFAULT NULL COMMENT '任务后置触发配置' AFTER `task_before_trigger_setting`,
+  ADD COLUMN `print_template_setting` text NULL DEFAULT NULL COMMENT '打印模板配置' AFTER `task_after_trigger_setting`;
+```
+
+### 6.3 本地配置（仅参考克隆，W2 裁剪时按模板化落地）
+
+4 份 `application-local.yaml`（gateway/system/infra/bpm）：MySQL → `jdbc:mysql://127.0.0.1:13306/ruoyi-vue-pro`、root + `docker/.env` 密码；Redis → `127.0.0.1:16379` + 密码；Nacos `namespace: public`（dev 不可用，见 ADR-002）；`spring.profiles.active: local`。
+
+### 6.4 构建与启动
+
+```powershell
+# 构建（首轮含依赖下载，实测 6m50s）
+$env:JAVA_HOME='D:\project\tools\jdk-17.0.21.1+2'
+mvn -DskipTests install -pl yudao-gateway,yudao-module-system/yudao-module-system-server,yudao-module-infra/yudao-module-infra-server,yudao-module-bpm/yudao-module-bpm-server -am
+# 启动顺序（每个服务等端口就绪）：system → infra → bpm → gateway
+java -Xms128m -Xmx768m -XX:MaxMetaspaceSize=360m -XX:+UseSerialGC -jar <模块>\target\<模块>.jar --spring.profiles.active=local
+```
+
+- 端口：gateway 48080 / system 48081 / infra 48082 / bpm 48083；**自研 4 服务预留 48084-48087**（W2 接入网关路由）；
+- 内存实测：4 JVM 合计 ~1.73GB（-Xmx 768/640/768/512 + SerialGC）+ 容器 ~2.4GB；16G 机器剩余约 1.25GB，起 vite dev 前先停无用容器；
+- bpm 首启由 Flowable `database-schema-update` 自动建 45 张 ACT_/FLW_ 表（约 60s），勿误判卡死。
+
+### 6.5 验证
+
+```powershell
+curl.exe -s http://127.0.0.1:48080/                                   # {"code":404,...}
+curl.exe -s -H "tenant-id: 1" http://127.0.0.1:48081/admin-api/system/ # {"code":401,...}
+# 登录：PowerShell 直传 JSON 会被引号吞噬，body 写文件再 --data-binary 提交
+curl.exe -s -X POST "http://127.0.0.1:48080/admin-api/system/auth/login" -H "tenant-id: 1" -H "Content-Type: application/json" --data-binary "@login-body.json"
+# 期望 code=0 + accessToken；再用 Bearer token 调 /admin-api/system/auth/get-permission-info（menus=28）
+```
+
+### 6.6 前端（W1 验收用预编译版）
+
+`yudao-demo`（gitee.com/yudaocode/yudao-demo）预编译管理端：`java -cp "target\classes;<cp>" cn.iocoder.ui.ElementPlusApplication` → http://127.0.0.1:2048/login（admin/admin123）。仅用于 W1 验证；W2 换 `yudao-ui-admin-vue3` 源码裁剪。
+
+## 7. 常见问题
 
 | 现象 | 处理 |
 | --- | --- |
@@ -94,7 +163,7 @@ docker exec bc-minio curl -fsS http://127.0.0.1:9000/minio/health/live   # 退�
 | 换了 .env 密码后 mysql root 登录被拒 | MySQL 账号密码仅在**数据卷首次初始化**时生效；改 .env 后需重置卷重建：`docker compose -f docker/middleware.yaml down` → `docker volume rm buildcloud_mysql-data` → `docker/start-middleware.ps1`（卷内仅中间件初始化数据，无业务数据；2026-11-25 实测） |
 | 想彻底重来 | `docker/stop-middleware.ps1 -Purge`（删除全部数据卷，不可逆），再从 §2 重来 |
 
-## 7. 版本依据（与基座对齐，升级需同步评估）
+## 8. 版本依据（与基座对齐，升级需同步评估）
 
 | 组件 | 镜像 tag | 依据 |
 | --- | --- | --- |

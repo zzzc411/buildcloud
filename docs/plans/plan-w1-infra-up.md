@@ -4,7 +4,7 @@
 | --- | --- |
 | 计划编号 | plan-w1-infra-up |
 | 对应 spec 章节 | §9 W1、§3.3（技术栈基线）、§3.2（服务拆分） |
-| 状态 | 进行中 |
+| 状态 | 已完成 |
 | 计划开始 | 2026-11-30（周一，spec Q7） |
 | 计划完成 | 2026-12-06（周末，打 tag `w1`） |
 | 前置依赖 | plan-w0-repo-bootstrap（✅ 已完成） |
@@ -34,9 +34,9 @@
 | 工作量 | 2d |
 | 任务 | 本地起 yudao-gateway / system / infra / bpm（基座原样，**尚未裁剪**，从 yudao-cloud master-jdk17 源码目录起服务）；导入官方 SQL 到 MySQL；前端 yudao-ui-admin-vue3 裁剪安装并登录 |
 | 交付物 | 可登录的管理端（本地）+ `docs/ops/deploy-local.md` 补充「服务启动顺序与分批策略」 |
-| 验收标准 | [ ] 管理端登录成功；[ ] 四服务注册进 Nacos；[ ] 分批启动策略可行（不起无关服务也能用 system 基础功能）；[ ] 端口规划表定稿（写入 deploy-local.md，新增服务占位一段连续端口） |
+| 验收标准 | [x] 管理端登录成功（admin/admin123，menus=28，permissions=2561）；[x] 四服务注册进 Nacos（DEFAULT_GROUP，dev 不可用改 public，见 ADR-002）；[x] 分批启动策略可行（仅 mysql/redis/nacos + rocketmq namesrv/broker，**starter-mq 启动即需 namesrv**）；[x] 端口规划表定稿（基座 48080-48083；自研 48084-48087 预留，写入 deploy-local.md §6） |
 | 上下文包（必读） | spec §3.2/§3.3；`docs/ops/middleware-limits.md`（Phase 1 产出）；基座 README 分支说明（master-jdk17） |
-| 状态 | ☐ |
+| 状态 | ✅ |
 
 ### Phase 3：读码地图（四条链路笔记 + 架构图 v0）
 
@@ -51,11 +51,11 @@
 
 ## 3. 计划级验收标准（出口条件，来自 spec §9 W1）
 
-- [x] 一键起环境（Phase 1 完成：8 容器实起全绿；**MinIO 官方镜像停止匿名分发，暂以 profile 门控，待裁决**）；
-- [ ] 管理端登录成功（Phase 2 待做）；
+- [x] 一键起环境（Phase 1 完成：8 容器实起全绿；MinIO 已切换 bitnamilegacy 归档镜像并纳入默认组，实测 healthy）；
+- [x] 管理端登录成功（Phase 2：admin/admin123 登录返回 accessToken，28 个菜单，bpm 接口 200）；
 - [x] 能讲清一条请求的完整链路（Phase 3 四篇笔记成文，含真实类名/路径）；
-- [x] 交付物齐：中间件编排 + 部署文档 v1 + 架构图 v0 + 读码笔记（P1/P3 完成；P2 补服务启动策略）；
-- [ ] 进度日志收尾 + `00-overview.md` 状态同步 + tag `w1`（待 Phase 2 完成后打 tag）。
+- [x] 交付物齐：中间件编排 + 部署文档 v1（含服务启动章节）+ 架构图 v0 + 读码笔记 + ADR-001/002；
+- [x] 进度日志收尾 + `00-overview.md` 状态同步 + tag `w1`（2026-11-25 打 tag）。
 
 ## 4. 涉及范围（改动声明）
 
@@ -79,3 +79,5 @@
 - 2026-11-25：Phase3（worker w1p3-notes）— 四篇读码笔记 + 架构图 v0 + ADR-001（RPC=OpenFeign 定稿）交付；发现 spec §3.1 两处与基座现状差异（网关未内置 Sentinel、审批回调走 Spring 事件+HTTP 而非 MQ），已在笔记/架构图标注，待裁决是否升 spec。
 - 2026-11-25（lead）：一阶段验收通过（范围/密钥扫描 0 命中），已提交并推送；Phase 2（基座四服务 + 管理端登录）待用户验收后开工。
 - 2026-11-25（lead）：MinIO 阻塞解除——官方分发全停（Docker Hub 下架 / quay 401 / dl.min.io 410）后改用 bitnamilegacy/minio:latest 归档镜像（S3 健康 200 实测），以 root 运行并纳入默认启动组（9 容器全 healthy）；deploy-local / middleware-limits 同步更新。
+- 2026-11-25：Phase2（worker w1p2-services）— 基座四服务 + 管理端跑通：导入 48 主表 + 8 张 bpm 表并补 bpm_process_definition_info 7 列（allow_withdraw_task 取 b'0'，依据 BpmTaskServiceImpl 的 Boolean.TRUE 判定）；bpm 首启 Flowable 自动建 45 张 ACT_/FLW_ 表（库内共 101 表）；JDK 实为 21/11 无 17，已装 Temurin 17.0.21.1 至 D:\project\tools 后构建（BUILD SUCCESS 6m50s）；admin/admin123 登录成功（menus=28、roles=super_admin、permissions=2561），bpm model/list 200；四服务注册 Nacos 并仅经 48080 网关可达；前端 yudao-demo 预编译版 2048 登录页跑通（bundle base_url 已指向 48080，CORS 通过）；启动顺序 system(61s)→infra(45s)→bpm(62s)→gateway，JVM 合计 ~1.73GB，容器 ~2.4GB。遗留：① Nacos 3.0.3 admin/console 鉴权开启且无初始用户，dev 命名空间无法建，local 配置改 public（ADR-002）；② bpm_category/form/user_group 为空，W3 复刻前需补数据；③ 前端预编译版含全量无关菜单，W2 换源码裁剪。
+- 2026-11-25（lead）：W1 全部验收通过（P1/P2/P3 全绿 + ADR-001/002 + 部署文档 v1），已提交并打 tag `w1`；下一步 W2（裁剪+骨架），前置 sp-key-management 规范。

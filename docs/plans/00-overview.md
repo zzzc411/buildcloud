@@ -62,7 +62,7 @@ spec v1.2（范围与排期唯一依据）
 
 | 计划 | 周次（日期） | 前置依赖 | Phase 数 | 状态 | 完成 |
 | --- | --- | --- | --- | --- | --- |
-| [plan-w1-infra-up.md](plan-w1-infra-up.md) | W1（11-30 ~ 12-06） | W0 ✅ | 3 | 进行中（P1/P3 ✅，P2 待做） | — |
+| [plan-w1-infra-up.md](plan-w1-infra-up.md) | W1（11-30 ~ 12-06） | W0 ✅ | 3 | ✅ 已完成（P1/P2/P3 全绿，tag `w1`） | — |
 | [plan-w2-repo-skeleton.md](plan-w2-repo-skeleton.md) | W2（12-07 ~ 12-13） | W1；∥ sp-key | 4 | 未开始 | — |
 | [plan-w3-project-contract.md](plan-w3-project-contract.md) | W3（12-14 ~ 12-20） | W2 | 5（P2∥P3） | 未开始 | — |
 | [plan-w4-material-v1.md](plan-w4-material-v1.md) | W4（12-21 ~ 12-27） | W3 | 6 | 未开始 | — |
@@ -95,7 +95,7 @@ spec v1.2（范围与排期唯一依据）
 | 周 | 计划 | 状态 | Phase 完成/总数 | 备注 |
 | --- | --- | --- | --- | --- |
 | W0 | repo-bootstrap | ✅ 已完成 | 7/7 | 2026-11-24；含 D22 迁移同步 |
-| W1 | infra-up | 🔄 进行中 | 2/3 | P1/P3 完成（2026-11-25 提前启动）；P2 待做；MinIO 已切 Bitnami 归档镜像（实测 healthy） |
+| W1 | infra-up | ✅ 已完成 | 3/3 | P1/P2/P3 全绿（2026-11-25，tag `w1`）；MinIO 已切 Bitnami 归档镜像；可登录演示（2048） |
 | W2 | repo-skeleton | ⬜ 未开始 | 0/4 | ∥ sp-key |
 | W3 | project-contract | ⬜ 未开始 | 0/5 | P2∥P3 |
 | W4 | material-v1 | ⬜ 未开始 | 0/6 | |
