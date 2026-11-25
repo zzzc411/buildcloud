@@ -5,7 +5,7 @@
 
 > 面向建筑施工企业的工程项目管理平台：微服务架构，覆盖**项目立项、合同资金、材料库存与集中申领（高并发主战场）、多级审批、异步报表**，并内置基于 **RAG** 的企业制度/施工规范知识库问答。
 
-- 📋 总规格（唯一范围与排期依据）：[docs/spec/buildcloud-spec-v1.1.md](docs/spec/buildcloud-spec-v1.1.md)
+- 📋 总规格（唯一范围与排期依据）：[docs/spec/buildcloud-spec-v1.2.md](docs/spec/buildcloud-spec-v1.2.md)
 - 🗂️ 文档中心：[docs/00-index.md](docs/00-index.md) ｜ 开发计划拆分：[docs/plans/00-overview.md](docs/plans/00-overview.md)
 - 🤖 人与智能体共同开发约束：[AGENTS.md](AGENTS.md) ｜ 子智能体派发指南：[docs/plans/_dispatch.md](docs/plans/_dispatch.md)
 
@@ -55,7 +55,7 @@
 buildcloud/
 ├── README.md / AGENTS.md / LICENSE / .gitignore
 ├── docs/                          # 文档中心（现已就绪，见 docs/00-index.md）
-│   ├── spec/                      #   总规格（v1.1 生效）
+│   ├── spec/                      #   总规格（v1.2 生效）
 │   ├── plans/                     #   开发计划（W1-W8 + 专项已拆分；含 00-overview/_template/_dispatch）
 │   ├── decisions/                 #   ADR 决策记录
 │   ├── architecture/              #   架构图 / ER 图 / 读码笔记

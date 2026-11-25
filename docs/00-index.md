@@ -8,7 +8,7 @@
 docs/
 ├── 00-index.md               # 本文件：文档总入口、版本命名规范、登记表
 ├── spec/                     # 总规格（范围/架构/里程碑的唯一依据）
-│   └── buildcloud-spec-v1.1.md
+│   └── buildcloud-spec-v1.2.md
 ├── plans/                    # 开发计划（从 spec 按周/专项拆分）
 │   ├── 00-overview.md        #   计划总览 + 依赖图 + 状态跟踪
 │   ├── _template.md          #   计划模板（所有计划从这里复制，含 Phase 结构）
@@ -29,7 +29,7 @@ docs/
 
 | 顺序 | 文档 | 说明 |
 | --- | --- | --- |
-| 1 | [spec v1.1](spec/buildcloud-spec-v1.1.md) | 项目宪法：范围、架构、里程碑、决策记录 D1-D22 |
+| 1 | [spec v1.2](spec/buildcloud-spec-v1.2.md) | 项目宪法：范围、架构、里程碑、决策记录 D1-D23 |
 | 2 | [plans/00-overview.md](plans/00-overview.md) | 计划清单、依赖图与进度 |
 | 3 | [plans/_dispatch.md](plans/_dispatch.md) | 子智能体派发指南（整周/单 Phase 派工的操作手册） |
 | 4 | [plans/_template.md](plans/_template.md) | 开发计划的标准结构（Phase 派发单元） |
@@ -67,7 +67,8 @@ docs/
 
 | 路径 | 日期 | 状态 | 说明 |
 | --- | --- | --- | --- |
-| `spec/buildcloud-spec-v1.1.md` | 2026-11-24 | 生效 | 总规格 v1.1（D22：工作区迁移 + 计划体系） |
+| `spec/buildcloud-spec-v1.2.md` | 2026-11-25 | 生效 | 总规格 v1.2（D23：按 W1 读码实证收敛审批回调与网关 Sentinel） |
+| `archive/buildcloud-spec-v1.1.md` | 2026-11-24 | 归档 | spec v1.1（被 v1.2 取代） |
 | `plans/00-overview.md` | 2026-11-24 | 生效 | 计划总览 + 依赖图（W1-W8 + 3 专项全部拆分） |
 | `plans/_template.md` | 2026-11-24 | 生效（v2 结构） | 计划模板（含 Phase 派发单元） |
 | `plans/_dispatch.md` | 2026-11-24 | 生效 | 子智能体派发指南与提示词模板 |

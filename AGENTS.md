@@ -1,7 +1,7 @@
 # AGENTS.md — 人与智能体共同开发约束
 
 > 本文件对**所有协作者一视同仁**：无论是人类开发者，还是参与本项目的任何 AI 智能体（编码助手/子代理/自动化脚本）。接受任务即视为接受本约束。
-> 违反「红线」条款的产出不得合入 `main`。冲突裁决顺序：本文件 < [docs/spec/buildcloud-spec-v1.1.md](docs/spec/buildcloud-spec-v1.1.md) < 当前生效的开发计划。
+> 违反「红线」条款的产出不得合入 `main`。冲突裁决顺序：本文件 < [docs/spec/buildcloud-spec-v1.2.md](docs/spec/buildcloud-spec-v1.2.md) < 当前生效的开发计划。
 
 ## 1. 项目事实卡（先读这个再动手）
 
@@ -18,7 +18,7 @@
 
 ## 2. 单一事实来源（文档纪律）
 
-1. **范围与排期只看 spec**（`docs/spec/buildcloud-spec-v1.1.md`）。spec 变更必须升版本号 + §14 变更记录 + 旧版归档 `docs/archive/`，禁止原地静默修改；
+1. **范围与排期只看 spec**（`docs/spec/buildcloud-spec-v1.2.md`）。spec 变更必须升版本号 + §14 变更记录 + 旧版归档 `docs/archive/`，禁止原地静默修改；
 2. 开工一个工作包前，先从 `docs/plans/_template.md` 创建计划并在 `docs/plans/00-overview.md` 登记；**计划只能细化、不能扩权**——发现需要新增/变更范围，停下来：记 ADR（`docs/decisions/`）或回 spec 升版本，经确认后再继续；以子智能体派发执行时，遵循 `docs/plans/_dispatch.md` 的派发规则与提示词模板；
 3. 新建任何文档必须登记进 `docs/00-index.md`；文档命名 kebab-case；被取代的文档移入 `docs/archive/`，不删除；
 4. 完成工作包 = 验收清单全勾 + 状态更新 + 进度日志最后一行写明结果。

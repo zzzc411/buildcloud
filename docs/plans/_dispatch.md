@@ -53,7 +53,7 @@ worker 完成并自查 ──▶ 交付（代码+文档+进度日志） ──�
 只做本 Phase 声明范围内的事；发现需要扩范围，停下来在结果里说明，不要自行扩。
 
 【2. 必读（按序）】
-- spec v1.1：D:\project\buildcloud\docs\spec\buildcloud-spec-v1.1.md 的 §{xx}、§{yy}
+- spec v1.2：D:\project\buildcloud\docs\spec\buildcloud-spec-v1.2.md 的 §{xx}、§{yy}
 - 前置产出：{路径列表}
 - 基座参考（只读，不改）：{基座模块路径}
 - 计划文件本身（重点看 Phase 表与验收标准）
