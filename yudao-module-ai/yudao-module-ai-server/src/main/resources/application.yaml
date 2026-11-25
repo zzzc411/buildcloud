@@ -78,7 +78,7 @@ mybatis-plus:
     banner: false # 关闭控制台的 Banner 打印
   type-aliases-package: ${yudao.info.base-package}.module.*.dal.dataobject
   encryptor:
-    password: XDV71a+xqStEA3WH # 加解密的秘钥，可使用 https://www.imaegoo.com/2020/aes-key-generator/ 网站生成
+    password: ${MYBATIS_ENCRYPTOR_PASSWORD:ChangeMe_Encryptor_Key_2026} # 加解密的秘钥，可使用 https://www.imaegoo.com/2020/aes-key-generator/ 网站生成
 
 mybatis-plus-join:
   banner: false # 关闭控制台的 Banner 打印
@@ -98,7 +98,7 @@ xxl:
     executor:
       appname: ${spring.application.name} # 执行器 AppName
       logpath: ${user.home}/logs/xxl-job/${spring.application.name} # 执行器运行日志文件存储磁盘路径
-    accessToken: default_token # 执行器通讯TOKEN
+    accessToken: ${XXL_JOB_ACCESS_TOKEN:default_token} # 执行器通讯TOKEN
 
 --- #################### AI 相关配置 ####################
 
@@ -123,23 +123,23 @@ spring:
           port: 19530
     openai: # OpenAI 官方
       base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1} # OpenAI 官方 SDK 的 baseUrl 需包含 /v1
-      api-key: ${OPENAI_API_KEY:sk-xxxx}
+      api-key: ${OPENAI_API_KEY:}
     azure: # OpenAI 微软
       openai:
         endpoint: https://eastusprejade.openai.azure.com
     anthropic: # Anthropic Claude
       base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
-      api-key: ${ANTHROPIC_API_KEY:sk-xxxx}
+      api-key: ${ANTHROPIC_API_KEY:}
     ollama:
       base-url: http://127.0.0.1:11434
       chat:
         model: llama3
     stabilityai:
-      api-key: ${STABILITYAI_API_KEY:sk-xxxx}
+      api-key: ${STABILITYAI_API_KEY:}
     dashscope: # 通义千问
-      api-key: ${DASHSCOPE_API_KEY:sk-xxxx}
+      api-key: ${DASHSCOPE_API_KEY:}
     deepseek: # DeepSeek
-      api-key: ${DEEPSEEK_API_KEY:sk-xxxx}
+      api-key: ${DEEPSEEK_API_KEY:}
       chat:
         options:
           model: deepseek-v4-flash
@@ -168,78 +168,78 @@ yudao:
     gemini: # 谷歌：Gemini
       chat:
         enable: true
-        api-key: ${GEMINI_API_KEY:sk-xxxx}
+        api-key: ${GEMINI_API_KEY:}
         model: gemini-2.5-flash
     bytedance: # 字节跳动：豆包
       chat:
         enable: true
-        api-key: ${DOUBAO_API_KEY:sk-xxxx}
+        api-key: ${DOUBAO_API_KEY:}
         model: doubao-seed-2-1-turbo-260628
     tencent: # 腾讯：混元
       chat:
         enable: true
-        api-key: ${HUNYUAN_API_KEY:sk-xxxx}
+        api-key: ${HUNYUAN_API_KEY:}
         model: hy3-preview
     siliconflow: # 硅基流动
       chat:
         enable: true
-        api-key: ${SILICONFLOW_API_KEY:sk-xxxx}
+        api-key: ${SILICONFLOW_API_KEY:}
         model: deepseek-ai/DeepSeek-V4-Pro
     iflytek: # 科大讯飞：星火
       chat:
         enable: true
-        api-key: ${XINGHUO_API_KEY:sk-xxxx}
+        api-key: ${XINGHUO_API_KEY:}
         model: x2-flash
     baichuan: # 百川智能
       chat:
         enable: true
-        api-key: ${BAICHUAN_API_KEY:sk-xxxx}
+        api-key: ${BAICHUAN_API_KEY:}
         model: Baichuan-M3
     baidu: # 百度：文心一言
       chat:
         enable: false
-        api-key: ${YIYAN_API_KEY:sk-xxxx}
+        api-key: ${YIYAN_API_KEY:}
         model: ernie-5.1
     zhipu: # 智谱：GLM
       chat:
         enable: false
-        api-key: ${ZHIPU_API_KEY:sk-xxxx}
+        api-key: ${ZHIPU_API_KEY:}
         model: glm-5.2
     minimax: # MiniMax
       chat:
         enable: false
-        api-key: ${MINIMAX_API_KEY:sk-xxxx}
+        api-key: ${MINIMAX_API_KEY:}
         model: MiniMax-M3
     moonshot: # 月之暗面：Kimi
       chat:
         enable: false
-        api-key: ${MOONSHOT_API_KEY:sk-xxxx}
+        api-key: ${MOONSHOT_API_KEY:}
         model: kimi-k2.6
     stepfun: # 阶跃星辰
       chat:
         enable: false
-        api-key: ${STEPFUN_API_KEY:sk-xxxx}
+        api-key: ${STEPFUN_API_KEY:}
         model: step-3.7-flash
     xiaomi: # 小米：MiMo
       chat:
         enable: false
-        api-key: ${MIMO_API_KEY:sk-xxxx}
+        api-key: ${MIMO_API_KEY:}
         model: mimo-v2.6-flash
     grok: # Grok
       chat:
         enable: false
-        api-key: ${GROK_API_KEY:sk-xxxx}
+        api-key: ${GROK_API_KEY:}
         model: grok-4.3
     midjourney: # Midjourney
       image:
         enable: true
   #      base-url: https://api.holdai.top/mj-relax/mj
         base-url: https://api.holdai.top/mj
-        api-key: ${MIDJOURNEY_API_KEY:sk-xxxx}
+        api-key: ${MIDJOURNEY_API_KEY:}
         notify-url: http://java.nat300.top/admin-api/ai/image/midjourney/notify
     web-search:
       enable: true
-      api-key: ${WEB_SEARCH_API_KEY:sk-xxxx}
+      api-key: ${WEB_SEARCH_API_KEY:}
 
 --- #################### 芋道相关配置 ####################
 

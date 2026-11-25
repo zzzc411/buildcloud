@@ -67,8 +67,7 @@ buildcloud/
 ├── docker/                        # 中间件 docker-compose 编排（W1）
 ├── sql/                           # 基座脚本（W2-P2 裁剪为 system/infra/bpm）+ sql/buildcloud/ 自研 bc_* 表
 │
-│  ↓ 以下为基座源码（W2-P1 已入仓，`mvn clean package -DskipTests` 全量通过；
-│     15 个无关模块待 W2-P2 删除，故当前目录中仍可见）
+│  ↓ 以下为基座源码（W2-P1 入仓，W2-P2 已裁掉 15 个无关模块；`mvn clean package -DskipTests` 全量通过）
 ├── yudao-dependencies/            # 依赖 BOM（基座）
 ├── yudao-framework/               # 框架 starters（基座）
 ├── yudao-gateway/                 # 网关（基座）
@@ -85,15 +84,17 @@ buildcloud/
 
 ## 快速开始
 
-> 🚧 **W2 进行中：基座源码已入仓且全量编译通过，但一键启动脚本与模板化配置在 W2-P2/P4 交付。** 届时此处更新为：克隆 → 复制 `*-template` 配置填本地值 → `docker compose` 起中间件 → 起服务 → 登录管理端。
+> 🚧 **W2 进行中：W2-P2 已删除 15 个无关模块并完成配置模板化 + 起服务脚本；W2-P4 将收敛为一键复现启动（README 实操版）。**
+> 当前启动链路：复制 `docker/.env.template` → `docker/.env` 填本地值（密钥不入库）→ `docker\start-middleware.ps1` → `mvn package -DskipTests` → `scripts\start-base.ps1`（system→infra→bpm→gateway）→ 管理端登录。
 
 ```bash
 git clone https://github.com/zzzc411/buildcloud.git
 cd buildcloud
-# 当前（W2-P1）可直接验证基座可编译（需 JDK 17）：
+# 构建（需 JDK 17；W2-P2 后 32 个 Maven 模块）：
 mvn clean package -DskipTests
-# W2-P4 后：cp docker/.env.template docker/.env  # 填本地配置（密钥不入库）
-# W2-P4 后：docker compose -f docker/middleware.yaml up -d
+# 起中间件（PowerShell）：先 cp docker/.env.template docker/.env 并填写密码
+#   docker\start-middleware.ps1
+# 起基座四服务（PowerShell）：scripts\start-base.ps1
 ```
 
 ## 里程碑路线图
@@ -102,7 +103,7 @@ mvn clean package -DskipTests
 | --- | --- | --- |
 | W0 | 仓库与文档体系初始化（本阶段） | ✅ 完成（2026-11-24） |
 | W1 | Docker 编排中间件 + 基座跑通 + 读码地图 | ✅ 完成（2026-11-25） |
-| W2 | 基座裁剪 + 4 个自研模块骨架 + 代码生成器四件套 | 🔄 进行中（P1 ✅ 基座入仓，P2-P4 待做） |
+| W2 | 基座裁剪 + 4 个自研模块骨架 + 代码生成器四件套 | 🔄 进行中（P1 ✅ 基座入仓，P2 ✅ 裁剪+配置模板化，P3-P4 待做） |
 | W3 | 项目域 + 合同域 + 立项审批流 | ⬜ |
 | W4 | 材料域 V1（同步链路）+ 申领审批闭环 | ⬜ |
 | W5 | 高并发改造 V2（Lua 预扣 / 事务消息 / 延迟关单 / 对账） | ⬜ |

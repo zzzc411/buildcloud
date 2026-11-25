@@ -4,7 +4,7 @@
 | --- | --- |
 | 计划编号 | plan-w2-repo-skeleton |
 | 对应 spec 章节 | §4（裁剪方案全部）、§9 W2、D16/D17 |
-| 状态 | 进行中（P1 ✅ / P2-P4 待做） |
+| 状态 | 进行中（P1 ✅ / P2 ✅ / P3-P4 待做） |
 | 计划开始 | 2026-12-07（周一） |
 | 计划完成 | 2026-12-13（周末，打 tag `w2`） |
 | 前置依赖 | plan-w1-infra-up（✅ 环境、登录、读码地图就位）；plan-sp-key-management（∥ 并行推进，P2 裁剪时必须落地其规范） |
@@ -45,9 +45,9 @@
 | 工作量 | 2d |
 | 任务 | 删 member/pay/report/mp/mall/erp/wms/crm/iot/mes/im/hrm/fms/pms/oa 十五个模块；连带：根 pom modules、Nacos 配置清理、`sql/` 只留 system/infra/bpm、网关路由删除无效项、system 菜单初始化 SQL 清死链；**同步执行 plan-sp-key-management 的模板化规范**（所有 application yaml 密钥位改 `${env}`） |
 | 交付物 | 裁剪后可编译仓库 + `sql/` 清单 + 网关路由表（docs/architecture 记录） |
-| 验收标准 | [ ] `mvn clean package -DskipTests` 通过；[ ] 全局搜索无被删模块编译期引用、菜单无死链；[ ] 密钥 grep 扫描 0 命中（对照 sp-key-management 清单） |
+| 验收标准 | [x] `mvn clean package -DskipTests` 通过（32 模块 / 1m15s，2026-11-26 实测，lead 独立复验 7.5s compile）；[x] 全局搜索无被删模块编译期引用（pom/网关/Java import 0 命中）、菜单无死链（system_menu 3449→259，仅 system/infra/bpm 三棵树）；[x] 密钥 grep 扫描 0 命中（scripts/scan-secrets.ps1，2277 文件，含 dev/application.yaml 去密钥、6 份 *-template 占位） |
 | 上下文包（必读） | spec §4.2/§4.3（8 条连带改动点全做）；`docs/plans/plan-sp-key-management.md`；Phase 1 产出 |
-| 状态 | ☐ |
+| 状态 | ✅（2026-11-26） |
 
 ### Phase 3：建 4 个 buildcloud 模块骨架
 
@@ -100,5 +100,6 @@
 ## 6. 进度日志（追加式，一行/次）
 
 - 2026-11-24：计划创建（自 spec §9 W2 / §4 拆分）。
+- 2026-11-26：**P2 完成** — 删 15 个无关模块（6280 文件）+ 根 pom（22→7 modules）/网关路由（8 条）/knife4j/菜单 SQL 连带清理；sql/ 仅留 mysql（新增 bpm-2025-03-15.sql、bpm-alter-2026-11-25.sql；system_menu 裁剪 3190 行、role_menu 1488 行，只剩 system/infra/bpm 三棵树）；6 份 application-local.yaml → *-template + `${VAR:默认}` 占位，dev/application.yaml 同步去密钥；新增 scripts/start-base.ps1、scripts/scan-secrets.ps1（全仓 0 命中，假密钥样本可检出）；`mvn clean package -DskipTests` BUILD SUCCESS（32 模块 / 1m15s）；lead 独立复核：编译 SUCCESS、扫描 0 命中、diff check OK。下一步：P3 建 4 个 buildcloud 模块骨架（Nacos 注册 + 网关路由 + 健康检查）。
 - 2026-11-26：**P1 已推送远端** — `feature/w2-skeleton` @ `bef2530`（GitHub 校验 9605 个文件，LICENSE/README/docs 齐备；本地分支已设 upstream 跟踪）。首次 push 被 GitHub push protection 拦截（上游多方言 SQL 含演示云 Key 形态串），按 spec §4.3.3 先删 9 个非 MySQL 方言 SQL 目录、MySQL 脚本演示 AccessKey 改 `DEMO_REDACTED_*`、`yudao-module-ai` 单测 Key 改占位符后复推通过（详见 P1 落地记录「P2 前置」条）。P2 正由 worker `w2p2-trim` 并行执行。
 - 2026-11-25：**P1 完成** — 基座 `master-jdk17` @ `8af49f7` 冻结快照入仓（`feature/w2-skeleton`）：22 个业务模块 + framework/gateway/server/dependencies + sql/script 就位；根 pom 摘除 `yudao-module-ai`（D12）；24 份 `application-local.yaml` 按 R-1 不入库；`mvn clean package -DskipTests` 85 模块 BUILD SUCCESS（10m23s）；README 增「基座来源与许可证」表并更新 W2 状态。下一步：P2 删 15 模块 + 网关路由/菜单/SQL 连带清理 + 配置模板化（联动 sp-key P1），目标 `mvn clean package -DskipTests` 仍通过且密钥扫描 0 命中。

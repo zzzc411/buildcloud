@@ -3,9 +3,9 @@
 spring:
   cloud:
     nacos:
-      server-addr: 127.0.0.1:8848 # Nacos 服务器地址
-      username: # Nacos 账号
-      password: # Nacos 密码
+      server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848} # Nacos 服务器地址，环境变量 NACOS_SERVER_ADDR
+      username: ${NACOS_USERNAME:} # Nacos 账号，环境变量 NACOS_USERNAME（未开鉴权留空）
+      password: ${NACOS_PASSWORD:} # Nacos 密码，环境变量 NACOS_PASSWORD（未开鉴权留空）
       discovery: # 【配置中心】配置项
         namespace: dev # 命名空间。这里使用 dev 开发环境
         group: DEFAULT_GROUP # 使用的 Nacos 配置分组，默认为 DEFAULT_GROUP
@@ -31,5 +31,5 @@ spring:
       client:
         instance:
           service-host-type: IP # 注册实例时，优先使用 IP [IP, HOST_NAME, CANONICAL_HOST_NAME]
-        username: admin
-        password: admin
+        username: ${SPRING_BOOT_ADMIN_USERNAME:admin}
+        password: ${SPRING_BOOT_ADMIN_PASSWORD:admin}

@@ -13,26 +13,11 @@
         <module>yudao-framework</module>
         <!-- Server 主项目 -->
         <module>yudao-server</module>
-        <!--  各种 module 拓展 -->
+        <!-- 基座保留模块：system / infra / bpm（BPM 工作流为审批域基座） -->
         <module>yudao-module-system</module>
         <module>yudao-module-infra</module>
-        <module>yudao-module-member</module>
         <module>yudao-module-bpm</module>
-        <module>yudao-module-pay</module>
-        <module>yudao-module-report</module>
-        <module>yudao-module-mp</module>
-        <module>yudao-module-mall</module>
-        <module>yudao-module-crm</module>
-        <module>yudao-module-erp</module>
-        <module>yudao-module-iot</module>
-        <module>yudao-module-mes</module>
-        <module>yudao-module-wms</module>
-        <module>yudao-module-im</module>
         <!-- D12：yudao-module-ai 保留源码作 RAG/知识库设计参考，不参与构建（自研见 buildcloud-module-ai） -->
-        <module>yudao-module-hrm</module>
-        <module>yudao-module-fms</module>
-        <module>yudao-module-pms</module>
-        <module>yudao-module-oa</module>
     </modules>
 
     <name>${project.artifactId}</name>
