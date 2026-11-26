@@ -20,9 +20,24 @@
 
 **原因**：PowerShell 把 `-Dmaven.test.skip=true` 拆成两个 token。
 
-**修复**：`cmd /c "mvn -B -ntp '-DskipTests' '-Dmaven.test.skip=true' package"`，或整体加单引号。
+**修复（分两种调用姿势，别混用）**：
+- **PowerShell 直接调用**：`mvn -B -ntp '-DskipTests' '-Dmaven.test.skip=true' package`（必须加引号）；
+- **`cmd /c "..."` 包裹**：`cmd /c "mvn -B -ntp -DskipTests -Dmaven.test.skip=true package"`（**外层双引号已足够，内层再加单引号会被 cmd 原样传给 Maven，报 `Unknown lifecycle phase "'-DskipTests'"`**）。
 
-**影响面**：所有构建脚本、worker 派发指令都要写明。已写入 AGENTS §6.7。
+**影响面**：所有构建脚本、worker 派发指令都要写明调用姿势。已写入 AGENTS §6.7。
+（W3-P1 实证：两种姿势混用会互相抵消，是高频误踩点。）
+
+### L1-1b PowerShell 不支持 `<` 输入重定向
+
+**现象**：`docker exec ... mysql ... < file.sql` 报 `RedirectionNotSupported`。
+**修复**：`docker cp file.sql bc-mysql:/tmp/x.sql` + `docker exec ... sh -c 'mysql ... < /tmp/x.sql'`（重定向放进容器内 shell）。
+**影响面**：所有「导入 SQL 到容器」的操作。已用于 W2/W3 的建表与菜单导入。
+
+### L1-1c 运行中的 jar 会阻塞 `install` 的 repackage
+
+**现象**：`install` 在 `spring-boot:repackage` 阶段失败 `Unable to rename ...jar to ...jar.original`。
+**原因**：另一个进程正持有该 jar 文件句柄（服务还在跑）。
+**修复**：先停服务；或临时加 `-Dspring-boot.repackage.skip=true`（仅验证编译时）。**不要为了打包去 kill 生产/演示进程**——先问。 
 
 ### L1-2 本机无 JDK 17，PATH 默认是 JDK 21
 

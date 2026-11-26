@@ -4,7 +4,7 @@
 | --- | --- |
 | 计划编号 | plan-w3-project-contract |
 | 对应 spec 章节 | §5.1（项目+合同域设计）、§9 W3 |
-| 状态 | 未开始 |
+| 状态 | 进行中（P1 ✅ / P2-P5 待做） |
 | 计划开始 | 2026-12-14（周一） |
 | 计划完成 | 2026-12-20（周末，打 tag `w3`） |
 | 前置依赖 | plan-w2-repo-skeleton（✅ 骨架 + 生成器就绪） |
@@ -23,9 +23,9 @@
 | 工作量 | 1d |
 | 任务 | `bc_project / bc_project_milestone / bc_project_member` 与 `bc_contract / bc_contract_payment_plan / bc_contract_payment_record / bc_contract_change` 全字段设计（BaseDO 六字段沿用）；Mermaid ER 图；`sql/buildcloud/{project,contract}.sql`（可重复执行）；错误码段位注册（project 1-100 / contract 1-101） |
 | 交付物 | `docs/architecture/er-diagram-v0.md` + 两份 SQL + 错误码常量骨架 |
-| 验收标准 | [ ] 7 表字段覆盖 spec §5.1 全部实体属性；[ ] SQL 幂等可执行；[ ] ER 图登记入索引 |
-| 上下文包（必读） | spec §5.1、§7.1/§7.2；基 BaseDO/错误码规范（读码笔记） |
-| 状态 | ☐ |
+| 验收标准 | [x] 7 表字段覆盖 spec §5.1 全部实体属性（逐项对照 16/6/3/7/5/4/5 全齐）；[x] SQL 幂等可执行（01/03 各连跑 4+2 次 exit=0，表数恒 7）；[x] ER 图登记入索引（279 行，66 列程序化比对完全对齐）；[x] 附加：错误码 contract 1-101 段位 14 条零重叠；中文 HEX 校验 E6B58BE8AF95E59088E5908C 通过 |
+| 上下文包（必读） | spec §5.1、§7.1/§7.2；基 BaseDO/错误码规范（读码笔记）；`docs/ops/lessons-learned.md` L2-10（字符集） |
+| 状态 | ✅（2026-11-27） |
 
 ### Phase 2：项目子域 CRUD + 数据权限 ∥
 
@@ -95,3 +95,4 @@
 ## 6. 进度日志（追加式，一行/次）
 
 - 2026-11-24：计划创建（自 spec §9 W3 / §5.1 拆分；Phase 2/3 可并行）。
+- 2026-11-27：**P1 完成** — 项目域 3 表 + 合同域 4 表 SQL 与 ER 图落地：01-project.sql 扩为 3 表（bc_project 经核对已完整覆盖 spec §5.1 全部 14 项属性，未建多余 al-ter）、新建 03-contract.sql（4 表）、docs/architecture/er-diagram-v0.md（Mermaid 7 实体 + 字段摘要 + 8 条设计取舍：approval_no 存字符串不建 BPM 外键、change_amount 允许负数、不建物理外键、唯一键必带 tenant_id）、contract ErrorCodeConstants（1-101 段位 14 条，与基座及 project 段位零重叠）；bc-mysql 实测各脚本多次执行 exit=0 且表数恒 7，中文 HEX 校验通过，ER 图与库表 66 列程序化比对完全对齐，mvn install BUILD SUCCESS。遗留：H2 单测 create_tables.sql 待 P2 补齐；基座 ServiceErrorCodeRange 注释补五段位待 lead 决定（R-2）。下一步：P2/P3 生成器四件套（可 ∥ 并行）。

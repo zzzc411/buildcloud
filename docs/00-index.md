@@ -75,7 +75,7 @@ docs/
 | `plans/plan-w0-repo-bootstrap.md` | 2026-11-24 | 已完成 | W0：仓库与文档体系初始化（含工作区迁移同步） |
 | `plans/plan-w1-infra-up.md` | 2026-11-24 | 已完成 | W1：环境与基座跑通（P1/P2/P3 全绿，tag `w1`，2026-11-25） |
 | `plans/plan-w2-repo-skeleton.md` | 2026-11-24 | 已完成 | W2：基座裁剪 + 4 模块骨架 + 生成器四件套（P1-P4 全绿，tag `w2`） |
-| `plans/plan-w3-project-contract.md` | 2026-11-24 | 未开始 | W3：项目域 + 合同域 + 立项/进度款审批 |
+| `plans/plan-w3-project-contract.md` | 2026-11-24 | 进行中 | W3：项目域 + 合同域 + 立项/进度款审批（P1 ✅） |
 | `plans/plan-w4-material-v1.md` | 2026-11-24 | 未开始 | W4：材料域 V1 同步链路 + 申领审批闭环 |
 | `plans/plan-w5-concurrent-v2.md` | 2026-11-24 | 未开始 | W5：高并发改造 V2（Lua/事务消息/延迟关单/对账/缓存） |
 | `plans/plan-w6-consistency-report.md` | 2026-11-24 | 未开始 | W6：Seata + 分库分表 + 异步报表 + 首轮压测 |
@@ -86,6 +86,7 @@ docs/
 | `plans/plan-sp-interview-qa.md` | 2026-11-24 | 进行中 | 专项：面试 Q&A 弹药库（P1 ✅ v0.1；八章待 W5-W7 填充） |
 | `decisions/001-rpc-mode.md` | 2026-11-25 | 生效 | ADR-001：服务间 RPC=Spring Cloud OpenFeign（W1-P3 定稿） |
 | `architecture/codegen-demo-vue/` | 2026-11-26 | 生效 | 代码生成器 Vue 四件套示例（bc_project，W2-P4 精修产物） |
+| `architecture/er-diagram-v0.md` | 2026-11-27 | 生效 | 项目域 + 合同域 ER 图 v0（7 表 66 列，W8 定稿） |
 | `decisions/002-nacos-namespace.md` | 2026-11-25 | 生效 | ADR-002：本地 Nacos 命名空间改用 public（临时，W2 再评估） |
 | `architecture/arch-overview-v0.md` | 2026-11-25 | 生效 | 架构图 v0（读码定稿版，含与 spec §3.1 差异标注） |
 | `architecture/reading-notes-gateway.md` | 2026-11-25 | 生效 | 网关鉴权链路读码笔记 |

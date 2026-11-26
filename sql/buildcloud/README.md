@@ -9,11 +9,14 @@
 
 | 顺序 | 文件 | 作用 | 依赖 |
 | --- | --- | --- | --- |
-| 1 | `01-project.sql` | 项目子域建表：`bc_project`（项目主表） | 基座主库 `ruoyi-vue-pro.sql` 已导入 |
+| 1 | `01-project.sql` | 项目子域建表：`bc_project`（项目主表）、`bc_project_milestone`（里程碑）、`bc_project_member`（成员） | 基座主库 `ruoyi-vue-pro.sql` 已导入 |
 | 2 | `02-menu.sql` | 五大菜单组骨架 + 项目台账页面/按钮权限（`system_menu`，id 段 9000-9049） | 同上 |
+| 3 | `03-contract.sql` | 合同资金子域建表：`bc_contract`、`bc_contract_payment_plan`、`bc_contract_payment_record`、`bc_contract_change` | 同上（`contract.project_id` 逻辑关联 `bc_project`，不建物理外键） |
 
-> 后续按 spec §7.1 继续追加：`03-contract.sql`（合同域 4 张）、`04-material.sql`（材料域 7 张）、
+> 后续按 spec §7.1 继续追加：`04-material.sql`（材料域 7 张）、
 > `05-report.sql`（报表域 1 张）、`06-ai.sql`（AI 域 3 张 + pgvector chunk 表）。
+> 域内结构变更用 `0N-xxx-alter-YYYY-MM-DD.sql`（幂等：先查 `INFORMATION_SCHEMA` 再 `ALTER`）。
+> 字段与 spec §5.1 的逐项对照、ER 图与设计取舍见 `docs/architecture/er-diagram-v0.md`。
 > **每个文件只增不改**；结构变更另起 `0N-xxx-alter-YYYY-MM-DD.sql`，不原地改写历史脚本。
 
 ## 执行方式
