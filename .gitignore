@@ -37,7 +37,11 @@ secrets/
 nacos-data/
 
 # ---- 数据与运行时 ----
-data/
+# 注意：这里必须锚定到仓库根目录（前导 /）。写成裸 `data/` 会按「任意层级」匹配，
+# 从而把 Java 包目录 .../controller/admin/dict/vo/data/ 一并忽略掉——
+# 基座 system 模块的 DictData*VO 四个类就在该包里，一旦被忽略，全新 clone 后
+# yudao-module-system-server 直接编译失败（本地因文件仍在磁盘上而看不出来）。
+/data/
 mysql-data/
 pg-data/
 minio-data/
