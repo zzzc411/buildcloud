@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>cn.iocoder.cloud</groupId>
+        <artifactId>yudao</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.buildcloud</groupId>
+    <artifactId>buildcloud-module-ai</artifactId>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>buildcloud-module-ai-api</module>
+        <module>buildcloud-module-ai-server</module>
+    </modules>
+
+    <name>${project.artifactId}</name>
+    <description>
+        RAG 知识库、智能问答与会话（spec §5.5）
+    </description>
+
+</project>

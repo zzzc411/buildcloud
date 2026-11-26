@@ -88,11 +88,11 @@ docker exec bc-minio curl -fsS http://127.0.0.1:9000/minio/health/live   # 退�
 
 ### 6.2 数据库准备（bc-mysql:13306，库 `ruoyi-vue-pro`）
 
-| 脚本 | 来源 | 说明 |
+| 脚本 | 来源（仓库内） | 说明 |
 | --- | --- | --- |
-| `ruoyi-vue-pro.sql` | 基座仓库 `sql/mysql/`（参考克隆 `D:\project\yudao-cloud-ref\sql\mysql\`） | 48 张 system_/infra_ 表 + 初始数据 |
-| `bpm.sql` | 芋道星球附件 `bpm-2025-03-15`（**仅本地使用；公开仓库嵌入前须评估授权**） | 8 张 bpm_ 表；其中 2 表带数据（definition_info 250 条、expression 2 条），category/form/user_group 为空 |
-| `bpm-alter`（见下） | 由当前 DO 与 2025-03 版差异推出 | bpm 启动前必须补 7 列 |
+| `sql/mysql/ruoyi-vue-pro.sql` | 基座裁剪版（W2-P2，system+infra 48 表与初始数据；菜单已裁到 system/infra/bpm 三棵树） | 48 张 system_/infra_ 表 + 初始数据 |
+| `sql/mysql/bpm-2025-03-15.sql` | 芋道星球附件（**成员授权，勿对外分发**，文件头已注明） | 8 张 bpm_ 表 + 演示流程数据 |
+| `sql/mysql/bpm-alter-2026-11-25.sql` | 由当前 DO 与 2025-03 版差异推出 | bpm 启动前必须执行的 7 列 ALTER |
 
 导入（容器内 mysql 客户端 + UTF-8）：
 
@@ -114,21 +114,23 @@ ALTER TABLE `bpm_process_definition_info`
   ADD COLUMN `print_template_setting` text NULL DEFAULT NULL COMMENT '打印模板配置' AFTER `task_after_trigger_setting`;
 ```
 
-### 6.3 本地配置（仅参考克隆，W2 裁剪时按模板化落地）
+### 6.3 本地配置（W2-P2 起为模板机制）
 
-4 份 `application-local.yaml`（gateway/system/infra/bpm）：MySQL → `jdbc:mysql://127.0.0.1:13306/ruoyi-vue-pro`、root + `docker/.env` 密码；Redis → `127.0.0.1:16379` + 密码；Nacos `namespace: public`（dev 不可用，见 ADR-002）；`spring.profiles.active: local`。
+仓库只提交 `application-local.yaml.template`（`${VAR:默认}` 占位，敏感项无默认值；模板头部有变量说明）。`scripts/start-base.ps1` 会读取 `docker/.env` 注入环境变量，并在各模块缺少 `application-local.yaml` 时从模板复制（该真实文件已被 `.gitignore` 排除）。Nacos `namespace: public`（dev 不可用，见 ADR-002）；`spring.profiles.active: local`。
 
 ### 6.4 构建与启动
 
 ```powershell
-# 构建（首轮含依赖下载，实测 6m50s）
+# 构建（首轮含依赖下载，实测 6m50s；裁剪后 32 模块约 1m15s）
 $env:JAVA_HOME='D:\project\tools\jdk-17.0.21.1+2'
 mvn -DskipTests install -pl yudao-gateway,yudao-module-system/yudao-module-system-server,yudao-module-infra/yudao-module-infra-server,yudao-module-bpm/yudao-module-bpm-server -am
-# 启动顺序（每个服务等端口就绪）：system → infra → bpm → gateway
-java -Xms128m -Xmx768m -XX:MaxMetaspaceSize=360m -XX:+UseSerialGC -jar <模块>\target\<模块>.jar --spring.profiles.active=local
+# 启动（推荐）：自动注入 env + 缺省生成 application-local.yaml，按 system→infra→bpm→gateway 顺序
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-base.ps1
+# 等价单服务命令（需已生成 application-local.yaml）
+java -Xms128m -Xmx768m -XX:MaxMetaspaceSize=360m -XX:+UseSerialGC -jar <模块>\target\<模块>.jar --spring.profiles.active=local --spring.config.additional-location=optional:file:<模块>/src/main/resources/
 ```
 
-- 端口：gateway 48080 / system 48081 / infra 48082 / bpm 48083；**自研 4 服务预留 48084-48087**（W2 接入网关路由）；
+- 密钥自查（提交前必跑）：`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/scan-secrets.ps1 -Staged`（PS 5.1 执行策略需 Bypass；脚本以 UTF-8 BOM 保存）；
 - 内存实测：4 JVM 合计 ~1.73GB（-Xmx 768/640/768/512 + SerialGC）+ 容器 ~2.4GB；16G 机器剩余约 1.25GB，起 vite dev 前先停无用容器；
 - bpm 首启由 Flowable `database-schema-update` 自动建 45 张 ACT_/FLW_ 表（约 60s），勿误判卡死。
 

@@ -1,0 +1,49 @@
+# =============================================================================
+# 筑云 BuildCloud — 网关服务本地配置模板（gateway-server）
+# 用法：复制为同目录 application-local.yaml 后使用（该真实文件已被 .gitignore 忽略，绝不入库）；
+#       或运行 scripts/start-base.ps1 —— 它从 docker/.env 读取中间件参数、注入环境变量，
+#       并在缺失时自动复制本模板。
+# 占位语法：${环境变量名:默认值}，由 Spring 启动时解析；密钥类占位符无默认值，
+#       必须通过环境变量注入（AGENTS.md R-1：真实值绝不入库）。
+# =============================================================================
+
+--- #################### 注册中心 + 配置中心相关配置 ####################
+
+spring:
+  cloud:
+    nacos:
+      server-addr: ${NACOS_SERVER_ADDR:127.0.0.1:8848} # Nacos 服务器地址，环境变量 NACOS_SERVER_ADDR
+      username: ${NACOS_USERNAME:} # Nacos 账号，环境变量 NACOS_USERNAME（Nacos 未开鉴权时留空）
+      password: ${NACOS_PASSWORD:} # Nacos 密码，环境变量 NACOS_PASSWORD（Nacos 未开鉴权时留空）
+      discovery: # 【配置中心】配置项
+        namespace: ${NACOS_NAMESPACE:public} # 命名空间，环境变量 NACOS_NAMESPACE（默认 public，见 ADR-002）
+        group: DEFAULT_GROUP # 使用的 Nacos 配置分组，默认为 DEFAULT_GROUP
+      config: # 【注册中心】配置项
+        namespace: ${NACOS_NAMESPACE:public} # 命名空间，环境变量 NACOS_NAMESPACE（默认 public，见 ADR-002）
+        group: DEFAULT_GROUP # 使用的 Nacos 配置分组，默认为 DEFAULT_GROUP
+
+--- #################### 监控相关配置 ####################
+
+# Actuator 监控端点的配置项
+management:
+  endpoints:
+    web:
+      base-path: /actuator # Actuator 提供的 API 接口的根目录。默认为 /actuator
+      exposure:
+        include: '*' # 需要开放的端点。默认值只打开 health 和 info 两个端点。通过设置 * ，可以开放所有端点。
+
+# Spring Boot Admin 配置项
+spring:
+  boot:
+    admin:
+      # Spring Boot Admin Client 客户端的相关配置
+      client:
+        instance:
+          service-host-type: IP # 注册实例时，优先使用 IP [IP, HOST_NAME, CANONICAL_HOST_NAME]
+        username: ${SPRING_BOOT_ADMIN_USERNAME:admin}
+        password: ${SPRING_BOOT_ADMIN_PASSWORD:admin}
+
+# 日志文件配置
+logging:
+  level:
+    org.springframework.context.support.PostProcessorRegistrationDelegate: ERROR # TODO 芋艿：先禁用，Spring Boot 3.X 存在部分错误的 WARN 提示

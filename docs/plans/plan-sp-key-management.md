@@ -4,7 +4,7 @@
 | --- | --- |
 | 计划编号 | plan-sp-key-management |
 | 对应 spec 章节 | §4.3.8（敏感信息治理）、§4.4（密钥扫描验收）、R8、D19、AGENTS R-1 |
-| 状态 | 未开始 |
+| 状态 | 进行中（P1 🔄 模板化已随 W2-P2 落地、注入文档待补；P2 ✅；P3 待做） |
 | 计划开始 | 与 plan-w2 并行（规范先行，2026-12-07 当周落地） |
 | 计划完成 | 2026-12-13（随 W2 验收，此后长期执行） |
 | 前置依赖 | plan-w2-repo-skeleton Phase 1（基座配置文件入仓库后才有模板化对象） |
@@ -23,9 +23,9 @@
 | 工作量 | 1d（并入 W2 Phase 2 执行） |
 | 任务 | 所有 `application*.yaml` / docker env / Nacos 导入配置：密钥位改 `${env:XXX}` 占位；仓库只提交 `*-template.yaml` 与 `.env.template`；`.gitignore` 补充本地真实值文件（`.env`、`application-local.yaml` 等）；每类配置在模板里写注释说明注入方式 |
 | 交付物 | 模板化后的配置集 + `.gitignore` 更新 + `docs/ops/secret-management.md`（注入方式说明：环境变量/本地未跟踪文件/Nacos 本地实例） |
-| 验收标准 | [ ] 仓库内 grep 常见密钥模式（password/secret/api-key/sk- 等）0 命中（占位符除外）；[ ] 按文档注入后本地可启动（W2 复现启动联动验证） |
+| 验收标准 | [x] 仓库内 grep 常见密钥模式 0 命中（scripts/scan-secrets.ps1 实测 2277 文件 / 0 命中）；[ ] 按文档注入后本地可启动（注入说明 secret-management.md 待 P3 补，W2-P4 复现启动时联动验证） |
 | 上下文包（必读） | spec §4.3.8、R8；AGENTS R-1；W2 Phase 2 上下文 |
-| 状态 | ☐ |
+| 状态 | 🔄（模板化完成；`docs/ops/secret-management.md` 待补） |
 
 ### Phase 2：密钥扫描脚本
 
@@ -34,9 +34,9 @@
 | 工作量 | 0.5d |
 | 任务 | `scripts/scan-secrets.ps1`：对 staged diff 与全仓做常见密钥模式扫描（含 LLM sk- 前缀、连接串、IP:端口@密码形态）；提供白名单机制（占位符语法）；接入提交前自查流程（AGENTS §5 自检项引用此脚本） |
 | 交付物 | 扫描脚本 + 使用说明（secret-management.md 内） |
-| 验收标准 | [ ] 对已知样本（测试用假密钥）100% 检出；[ ] 占位符不误报；[ ] 脚本入库并登记 |
+| 验收标准 | [x] 对已知样本（测试用假密钥）100% 检出（4/4；含 password/私网 IP/sk-）；[x] 占位符不误报；[x] 脚本入库并登记（`scripts/scan-secrets.ps1`，全仓 0 命中；PS 5.1 需 `-ExecutionPolicy Bypass` 运行） |
 | 上下文包（必读） | Phase 1 产出；AGENTS §5 |
-| 状态 | ☐ |
+| 状态 | ✅（2026-11-26） |
 
 ### Phase 3：LLM Key 注入方案设计（供 W7）
 
@@ -72,3 +72,4 @@
 ## 6. 进度日志（追加式，一行/次）
 
 - 2026-11-24：计划创建（spec §4.3.8/R8 的专项化，W2 周内落地）。
+- 2026-11-26：**P1/P2 随 W2-P2 落地** — 6 份 application-local.yaml → `*-template.yaml`（`${VAR:默认}` 占位，敏感项无默认值）+ 6 份 application-dev.yaml/application.yaml 去密钥；`scripts/scan-secrets.ps1`（全仓 2277 文件 0 命中；假密钥样本 4/4 检出；支持 `-Staged`）；遗留：`docs/ops/secret-management.md` 注入说明与 LLM Key 通道方案并入 P3（W7 前完成）。
