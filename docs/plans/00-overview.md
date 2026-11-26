@@ -64,7 +64,7 @@ spec v1.2（范围与排期唯一依据）
 | --- | --- | --- | --- | --- | --- |
 | [plan-w1-infra-up.md](plan-w1-infra-up.md) | W1（11-30 ~ 12-06） | W0 ✅ | 3 | ✅ 已完成（P1/P2/P3 全绿，tag `w1`） | — |
 | [plan-w2-repo-skeleton.md](plan-w2-repo-skeleton.md) | W2（12-07 ~ 12-13） | W1；∥ sp-key | 4 | ✅ 已完成（P1-P4 全绿，tag `w2`） | 2026-11-26 |
-| [plan-w3-project-contract.md](plan-w3-project-contract.md) | W3（12-14 ~ 12-20） | W2 | 5（P2∥P3） | 🔄 进行中（P1 ✅） | — |
+| [plan-w3-project-contract.md](plan-w3-project-contract.md) | W3（12-14 ~ 12-20） | W2 | 5（P2∥P3） | 🔄 进行中（P1/P2/P3 ✅） | — |
 | [plan-w4-material-v1.md](plan-w4-material-v1.md) | W4（12-21 ~ 12-27） | W3 | 6 | 未开始 | — |
 | [plan-w5-concurrent-v2.md](plan-w5-concurrent-v2.md) | W5（12-28 ~ 01-03） | W4 | 6（P5∥） | 未开始 | — |
 | [plan-w6-consistency-report.md](plan-w6-consistency-report.md) | W6（01-04 ~ 01-10） | W5；sp-seeding（硬） | 5（P1-P3∥） | 未开始 | — |
@@ -97,7 +97,7 @@ spec v1.2（范围与排期唯一依据）
 | W0 | repo-bootstrap | ✅ 已完成 | 7/7 | 2026-11-24；含 D22 迁移同步 |
 | W1 | infra-up | ✅ 已完成 | 3/3 | P1/P2/P3 全绿（2026-11-25，tag `w1`）；MinIO 已切 Bitnami 归档镜像；可登录演示（2048） |
 | W2 | repo-skeleton | ✅ 已完成 | 4/4 | P1 入仓 → P2 裁剪+模板化 → P3 四模块（48084-48087）→ P4 生成器四件套；44 模块编译通过；修复 .gitignore 阻断缺陷；tag `w2` |
-| W3 | project-contract | 🔄 进行中 | 1/5 | P1 ✅ 7 表 SQL + ER 图 v0 + 错误码；P2/P3 可并行 |
+| W3 | project-contract | 🔄 进行中 | 3/5 | P1 ✅ 7 表+ER+错误码；P2 ✅ 项目子域（状态机+数据权限）；P3 ✅ 合同子域（状态机+对账）；132 tests 全绿 |
 | W4 | material-v1 | ⬜ 未开始 | 0/6 | |
 | W5 | concurrent-v2 | ⬜ 未开始 | 0/6 | P5∥ |
 | W6 | consistency-report | ⬜ 未开始 | 0/5 | P1-P3∥；依赖 sp-seeding |

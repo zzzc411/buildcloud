@@ -37,7 +37,31 @@
 
 **现象**：`install` 在 `spring-boot:repackage` 阶段失败 `Unable to rename ...jar to ...jar.original`。
 **原因**：另一个进程正持有该 jar 文件句柄（服务还在跑）。
-**修复**：先停服务；或临时加 `-Dspring-boot.repackage.skip=true`（仅验证编译时）。**不要为了打包去 kill 生产/演示进程**——先问。 
+**修复**：先停服务；或临时加 `-Dspring-boot.repackage.skip=true`（仅验证编译时）。**不要为了打包去 kill 生产/演示进程**——先问。
+
+### L1-1d PowerShell 5.1 的 `Invoke-RestMethod` 会把中文 body 转成 `?`
+
+**现象**：`Invoke-RestMethod -Body '{"name":"滨江商务中心"}'` 落库变 `????????`（HEX `3F3F…`）。
+**原因**：PS 5.1 默认按 ISO-8859-1 编码 body，中文字符被替换。
+**修复**：显式 UTF-8 字节体——
+```powershell
+$bytes = [Text.Encoding]::UTF8.GetBytes($json)
+Invoke-RestMethod -Uri $u -Method Post -Headers @{'tenant-id'='1';'Content-Type'='application/json; charset=utf-8'} -Body $bytes
+```
+或用 `curl.exe --data-binary "@file.json"`（文件以 UTF-8 无 BOM 保存）。
+**判别**：**这是客户端问题，不是服务端编码缺陷**——同一数据用 curl 提交时 `HEX()` 正常。W3-P2/P3 联调均踩到。
+
+### L1-1e 多子域模块的 `@MapperScan` 扫描根
+
+**现象**：project 服务含 `com.buildcloud.project` 与 `com.buildcloud.contract` 两个顶层域，测试配置把 `yudao.info.base-package` 写成 `com.buildcloud.project` 时，**contract 的 Mapper 扫不到**（`No qualifying bean`）。
+**坑**：不能只改 base-package —— 它同时被 `mybatis-plus.type-aliases-package: ${yudao.info.base-package}.dal.dataobject` 引用，改成 `com.buildcloud` 会让 type-aliases 指向不存在的包。
+**正确修法（两处一起改）**：
+```yaml
+yudao.info.base-package: com.buildcloud
+mybatis-plus.type-aliases-package: ${yudao.info.base-package}.project.dal.dataobject,${yudao.info.base-package}.contract.dal.dataobject
+```
+（与主 `application.yaml` 写法一致）。改完即可删掉测试侧的临时补扫类。
+**教训**：并行 worker 各自加「测试专属绕过」时，收尾要统一回正解，否则技术债会固化。
 
 ### L1-2 本机无 JDK 17，PATH 默认是 JDK 21
 

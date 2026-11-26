@@ -6,8 +6,11 @@ import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
 import com.buildcloud.project.controller.admin.project.vo.ProjectPageReqVO;
 import com.buildcloud.project.controller.admin.project.vo.ProjectRespVO;
 import com.buildcloud.project.controller.admin.project.vo.ProjectSaveReqVO;
+import com.buildcloud.project.controller.admin.project.vo.ProjectStatusRespVO;
+import com.buildcloud.project.controller.admin.project.vo.ProjectUpdateStatusReqVO;
 import com.buildcloud.project.dal.dataobject.project.ProjectDO;
 import com.buildcloud.project.service.project.ProjectService;
+import com.buildcloud.project.service.project.ProjectStatusService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -49,6 +52,9 @@ public class ProjectController {
     @Resource
     private ProjectService projectService;
 
+    @Resource
+    private ProjectStatusService projectStatusService;
+
     @PostMapping("/create")
     @Operation(summary = "创建项目")
     @PreAuthorize("@ss.hasPermission('project:project:create')")
@@ -62,6 +68,27 @@ public class ProjectController {
     public CommonResult<Boolean> updateProject(@Valid @RequestBody ProjectSaveReqVO updateReqVO) {
         projectService.updateProject(updateReqVO);
         return success(true);
+    }
+
+    @PutMapping("/update-status")
+    @Operation(summary = "变更项目状态", description = "状态机：筹备(0) → 在建(1) ⇄ 停工(2) → 竣工(3)；非法流转返回 1_100_000_004")
+    @PreAuthorize("@ss.hasPermission('project:project:update')")
+    public CommonResult<Boolean> updateProjectStatus(@Valid @RequestBody ProjectUpdateStatusReqVO reqVO) {
+        projectStatusService.updateProjectStatus(reqVO);
+        return success(true);
+    }
+
+    @GetMapping("/list-next-status")
+    @Operation(summary = "获得指定状态可流转到的目标状态", description = "供前端按钮置灰/下拉过滤，与后端校验同源")
+    @Parameter(name = "status", description = "当前状态：0-筹备 1-在建 2-停工 3-竣工", required = true, example = "1")
+    @PreAuthorize("@ss.hasPermission('project:project:query')")
+    public CommonResult<List<ProjectStatusRespVO>> getNextStatusList(@RequestParam("status") Integer status) {
+        // 状态机返回的是枚举集合，这里显式转 VO：ProjectStatusEnum 的字段名是 status/name，
+        // 与 ProjectStatusRespVO 同名，BeanUtils 可直接映射
+        List<ProjectStatusRespVO> list = projectStatusService.getNextStatusList(status).stream()
+                .map(e -> BeanUtils.toBean(e, ProjectStatusRespVO.class))
+                .toList();
+        return success(list);
     }
 
     @DeleteMapping("/delete")

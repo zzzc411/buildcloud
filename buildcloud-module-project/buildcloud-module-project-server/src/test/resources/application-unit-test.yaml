@@ -29,7 +29,9 @@ spring:
 
 mybatis-plus:
   lazy-initialization: true # 单元测试，设置 MyBatis Mapper 延迟加载，加速每个单元测试
-  type-aliases-package: ${yudao.info.base-package}.dal.dataobject
+  # 显式列出两个子域的 dataobject 包（与主 application.yaml 一致）：D17 让 project 服务承载
+  # com.buildcloud.project 与 com.buildcloud.contract 两个顶层域，不能只靠 base-package 推导
+  type-aliases-package: ${yudao.info.base-package}.project.dal.dataobject,${yudao.info.base-package}.contract.dal.dataobject
   global-config:
     db-config:
       id-type: AUTO # H2 主键递增
@@ -49,4 +51,6 @@ mybatis-plus:
 # 筑云配置项，设置当前模块所有自定义的配置
 yudao:
   info:
-    base-package: com.buildcloud.project
+    # 取 com.buildcloud（而非单个子域）：基座 @MapperScan 以此为扫描根，
+    # project 服务需同时扫到 com.buildcloud.project.* 与 com.buildcloud.contract.* 的 Mapper
+    base-package: com.buildcloud

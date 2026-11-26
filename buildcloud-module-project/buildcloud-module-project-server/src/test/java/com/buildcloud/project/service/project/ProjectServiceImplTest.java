@@ -19,6 +19,7 @@ import static com.buildcloud.project.enums.ErrorCodeConstants.PROJECT_NO_DUPLICA
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * {@link ProjectServiceImpl} 的单元测试类
@@ -77,6 +78,7 @@ public class ProjectServiceImplTest extends BaseDbUnitTest {
         ProjectSaveReqVO updateReqVO = randomPojo(ProjectSaveReqVO.class, o -> {
             o.setId(dbProject.getId());
             o.setProjectNo(dbProject.getProjectNo()); // 编号不变，避免触发唯一校验
+            o.setStatus(dbProject.getStatus());       // 状态不变（见下一个用例：表单更新不改状态）
         });
 
         // 调用
@@ -84,6 +86,29 @@ public class ProjectServiceImplTest extends BaseDbUnitTest {
         // 校验是否更新正确
         ProjectDO project = projectMapper.selectById(updateReqVO.getId());
         assertPojoEquals(updateReqVO, project);
+    }
+
+    @Test
+    public void testUpdateProject_statusNotChanged() {
+        // mock 数据：项目已竣工(3)
+        ProjectDO dbProject = randomPojo(ProjectDO.class, o -> o.setStatus(3));
+        projectMapper.insert(dbProject);
+        // 准备参数：表单里塞一个「筹备(0)」——状态机只允许 竣工→(无)，所以这不合法，
+        // 但 updateProject 必须**直接忽略** status 字段，而不是靠状态机拒绝
+        ProjectSaveReqVO updateReqVO = randomPojo(ProjectSaveReqVO.class, o -> {
+            o.setId(dbProject.getId());
+            o.setProjectNo(dbProject.getProjectNo());
+            o.setStatus(0);
+            o.setProjectName("改名后的项目");
+        });
+
+        // 调用
+        projectService.updateProject(updateReqVO);
+
+        // 断言：其它字段更新了，但 status 保持竣工不变（状态只能走状态机接口）
+        ProjectDO updated = projectMapper.selectById(dbProject.getId());
+        assertEquals("改名后的项目", updated.getProjectName());
+        assertEquals(3, updated.getStatus());
     }
 
     @Test
