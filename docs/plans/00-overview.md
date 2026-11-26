@@ -63,7 +63,7 @@ spec v1.2（范围与排期唯一依据）
 | 计划 | 周次（日期） | 前置依赖 | Phase 数 | 状态 | 完成 |
 | --- | --- | --- | --- | --- | --- |
 | [plan-w1-infra-up.md](plan-w1-infra-up.md) | W1（11-30 ~ 12-06） | W0 ✅ | 3 | ✅ 已完成（P1/P2/P3 全绿，tag `w1`） | — |
-| [plan-w2-repo-skeleton.md](plan-w2-repo-skeleton.md) | W2（12-07 ~ 12-13） | W1；∥ sp-key | 4 | 🔄 进行中（P1/P2 ✅） | — |
+| [plan-w2-repo-skeleton.md](plan-w2-repo-skeleton.md) | W2（12-07 ~ 12-13） | W1；∥ sp-key | 4 | 🔄 进行中（P1/P2/P3 ✅） | — |
 | [plan-w3-project-contract.md](plan-w3-project-contract.md) | W3（12-14 ~ 12-20） | W2 | 5（P2∥P3） | 未开始 | — |
 | [plan-w4-material-v1.md](plan-w4-material-v1.md) | W4（12-21 ~ 12-27） | W3 | 6 | 未开始 | — |
 | [plan-w5-concurrent-v2.md](plan-w5-concurrent-v2.md) | W5（12-28 ~ 01-03） | W4 | 6（P5∥） | 未开始 | — |
@@ -96,7 +96,7 @@ spec v1.2（范围与排期唯一依据）
 | --- | --- | --- | --- | --- |
 | W0 | repo-bootstrap | ✅ 已完成 | 7/7 | 2026-11-24；含 D22 迁移同步 |
 | W1 | infra-up | ✅ 已完成 | 3/3 | P1/P2/P3 全绿（2026-11-25，tag `w1`）；MinIO 已切 Bitnami 归档镜像；可登录演示（2048） |
-| W2 | repo-skeleton | 🔄 进行中 | 2/4 | P1 ✅ 基座 `master-jdk17@8af49f7` 入仓；P2 ✅ 删 15 模块 + 配置模板化 + 扫描 0 命中（32 模块编译通过）；P3/P4 待做 |
+| W2 | repo-skeleton | 🔄 进行中 | 3/4 | P1 ✅ 入仓；P2 ✅ 裁剪+模板化+扫描；P3 ✅ 4 自研模块（48084-48087，经网关 health code=0，44 模块编译通过）；P4 待做 |
 | W3 | project-contract | ⬜ 未开始 | 0/5 | P2∥P3 |
 | W4 | material-v1 | ⬜ 未开始 | 0/6 | |
 | W5 | concurrent-v2 | ⬜ 未开始 | 0/6 | P5∥ |

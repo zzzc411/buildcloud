@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>cn.iocoder.cloud</groupId>
+        <artifactId>yudao</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.buildcloud</groupId>
+    <artifactId>buildcloud-module-material</artifactId>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>buildcloud-module-material-api</module>
+        <module>buildcloud-module-material-server</module>
+    </modules>
+
+    <name>${project.artifactId}</name>
+    <description>
+        物料主数据、库存、申领与流水（高并发主战场，spec §5.2）
+    </description>
+
+</project>

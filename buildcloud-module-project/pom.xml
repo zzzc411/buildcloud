@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <groupId>cn.iocoder.cloud</groupId>
+        <artifactId>yudao</artifactId>
+        <version>${revision}</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.buildcloud</groupId>
+    <artifactId>buildcloud-module-project</artifactId>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>buildcloud-module-project-api</module>
+        <module>buildcloud-module-project-server</module>
+    </modules>
+
+    <name>${project.artifactId}</name>
+    <description>
+        项目/里程碑/成员/数据权限，以及合同/收付款计划/变更（D17：contract 并入 project 服务）
+    </description>
+
+</project>

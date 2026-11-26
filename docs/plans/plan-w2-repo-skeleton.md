@@ -4,7 +4,7 @@
 | --- | --- |
 | 计划编号 | plan-w2-repo-skeleton |
 | 对应 spec 章节 | §4（裁剪方案全部）、§9 W2、D16/D17 |
-| 状态 | 进行中（P1 ✅ / P2 ✅ / P3-P4 待做） |
+| 状态 | 进行中（P1/P2/P3 ✅ / P4 待做） |
 | 计划开始 | 2026-12-07（周一） |
 | 计划完成 | 2026-12-13（周末，打 tag `w2`） |
 | 前置依赖 | plan-w1-infra-up（✅ 环境、登录、读码地图就位）；plan-sp-key-management（∥ 并行推进，P2 裁剪时必须落地其规范） |
@@ -56,9 +56,9 @@
 | 工作量 | 1.5d |
 | 任务 | 建 `buildcloud-module-project / -material / -report / -ai`：groupId `com.buildcloud`（D16）；结构照基座模块（framework starter 引用按读码笔记 ④）；project 模块内预建 `com.buildcloud.project.*` / `com.buildcloud.contract.*` 分包（D17）；注册 Nacos + 网关路由 + 一个健康检查/空控制器接口；预留端口接入 Phase 规划表 |
 | 交付物 | 4 模块可启动；网关 `/admin-api/buildcloud-{x}/health` 可路由 |
-| 验收标准 | [ ] 4 模块注册 Nacos 可见；[ ] 网关路由返回健康检查；[ ] 包结构与 starter 引用符合基座规范（对照读码笔记） |
+| 验收标准 | [x] 4 模块注册 Nacos 可见（public 命名空间，实测 buildcloud-project-server healthy）；[x] 网关路由返回健康检查（经网关 GET /admin-api/buildcloud-project/health → code=0，Swagger 转发 200）；[x] 包结构与 starter 引用符合基座规范（对照读码笔记 §3；补 rpc starter 并注明 security 中为 optional） |
 | 上下文包（必读） | spec §4.2（新增 4 模块行）；读码笔记 starter 篇（W1 产出）；基座任一模块做模板参考（只读） |
-| 状态 | ☐ |
+| 状态 | ✅（2026-11-26） |
 
 ### Phase 4：代码生成器四件套 + 复现启动验收
 
@@ -100,6 +100,7 @@
 ## 6. 进度日志（追加式，一行/次）
 
 - 2026-11-24：计划创建（自 spec §9 W2 / §4 拆分）。
+- 2026-11-26：**P3 完成** — 新增 4 个自研模块（buildcloud-module-{project,material,report,ai}，各 -api/-server 双子模块，groupId/包 com.buildcloud，D16；project 含 com.buildcloud.project + com.buildcloud.contract 双子域包，D17），端口 48084-48087、服务名 buildcloud-*-server；网关 4 条 /admin-api/buildcloud-*/** 路由 + knife4j 4 项；根 pom modules 7→11 目录（44 Maven 模块）；starter 按读码笔记落 pom（project + biz-data-permission，material + mq/job，report + job，ai 最小），补 rpc starter（security 中 optional 不传递，实测缺它启动失败）；健康接口 GET /admin-api/buildcloud-{x}/health → CommonResult("ok")（tenant ignore-urls 免依赖 system-server）；`mvn clean package -DskipTests` BUILD SUCCESS（44 模块 / 1m34s）；联调实测 gateway+project 注册 Nacos，经网关 health code=0、Swagger 200；lead 独立复验 compile 通过、密钥扫描 0 命中。遗留（P4）：start-base 脚本纳入 4 新服务、健康探活口径（基座服务无 /actuator/health）、RPC 层 XxxApi、错误码常量。下一步：P4 代码生成器四件套 + README 实操 + sql/buildcloud/ 落地。
 - 2026-11-26：**P2 完成** — 删 15 个无关模块（6280 文件）+ 根 pom（22→7 modules）/网关路由（8 条）/knife4j/菜单 SQL 连带清理；sql/ 仅留 mysql（新增 bpm-2025-03-15.sql、bpm-alter-2026-11-25.sql；system_menu 裁剪 3190 行、role_menu 1488 行，只剩 system/infra/bpm 三棵树）；6 份 application-local.yaml → *-template + `${VAR:默认}` 占位，dev/application.yaml 同步去密钥；新增 scripts/start-base.ps1、scripts/scan-secrets.ps1（全仓 0 命中，假密钥样本可检出）；`mvn clean package -DskipTests` BUILD SUCCESS（32 模块 / 1m15s）；lead 独立复核：编译 SUCCESS、扫描 0 命中、diff check OK。下一步：P3 建 4 个 buildcloud 模块骨架（Nacos 注册 + 网关路由 + 健康检查）。
 - 2026-11-26：**P1 已推送远端** — `feature/w2-skeleton` @ `bef2530`（GitHub 校验 9605 个文件，LICENSE/README/docs 齐备；本地分支已设 upstream 跟踪）。首次 push 被 GitHub push protection 拦截（上游多方言 SQL 含演示云 Key 形态串），按 spec §4.3.3 先删 9 个非 MySQL 方言 SQL 目录、MySQL 脚本演示 AccessKey 改 `DEMO_REDACTED_*`、`yudao-module-ai` 单测 Key 改占位符后复推通过（详见 P1 落地记录「P2 前置」条）。P2 正由 worker `w2p2-trim` 并行执行。
 - 2026-11-25：**P1 完成** — 基座 `master-jdk17` @ `8af49f7` 冻结快照入仓（`feature/w2-skeleton`）：22 个业务模块 + framework/gateway/server/dependencies + sql/script 就位；根 pom 摘除 `yudao-module-ai`（D12）；24 份 `application-local.yaml` 按 R-1 不入库；`mvn clean package -DskipTests` 85 模块 BUILD SUCCESS（10m23s）；README 增「基座来源与许可证」表并更新 W2 状态。下一步：P2 删 15 模块 + 网关路由/菜单/SQL 连带清理 + 配置模板化（联动 sp-key P1），目标 `mvn clean package -DskipTests` 仍通过且密钥扫描 0 命中。

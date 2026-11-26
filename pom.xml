@@ -18,6 +18,11 @@
         <module>yudao-module-infra</module>
         <module>yudao-module-bpm</module>
         <!-- D12：yudao-module-ai 保留源码作 RAG/知识库设计参考，不参与构建（自研见 buildcloud-module-ai） -->
+        <!-- 自研模块（D16：groupId com.buildcloud、包 com.buildcloud、模块前缀 buildcloud-；D17：contract 并入 project） -->
+        <module>buildcloud-module-project</module>
+        <module>buildcloud-module-material</module>
+        <module>buildcloud-module-report</module>
+        <module>buildcloud-module-ai</module>
     </modules>
 
     <name>${project.artifactId}</name>

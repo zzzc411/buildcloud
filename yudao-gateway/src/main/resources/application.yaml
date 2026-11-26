@@ -77,6 +77,31 @@ spring:
                 - Path=/admin-api/bpm/**
               filters:
                   - RewritePath=/admin-api/bpm/v3/api-docs, /v3/api-docs
+            ## buildcloud 自研服务（W2 新增 4 个，端口 48084-48087）
+            - id: buildcloud-project-admin-api # 路由的编号
+              uri: grayLb://buildcloud-project-server
+              predicates: # 断言，作为路由的匹配条件，对应 RouteDefinition 数组
+                - Path=/admin-api/buildcloud-project/**
+              filters:
+                  - RewritePath=/admin-api/buildcloud-project/v3/api-docs, /v3/api-docs
+            - id: buildcloud-material-admin-api # 路由的编号
+              uri: grayLb://buildcloud-material-server
+              predicates: # 断言，作为路由的匹配条件，对应 RouteDefinition 数组
+                - Path=/admin-api/buildcloud-material/**
+              filters:
+                  - RewritePath=/admin-api/buildcloud-material/v3/api-docs, /v3/api-docs
+            - id: buildcloud-report-admin-api # 路由的编号
+              uri: grayLb://buildcloud-report-server
+              predicates: # 断言，作为路由的匹配条件，对应 RouteDefinition 数组
+                - Path=/admin-api/buildcloud-report/**
+              filters:
+                  - RewritePath=/admin-api/buildcloud-report/v3/api-docs, /v3/api-docs
+            - id: buildcloud-ai-admin-api # 路由的编号
+              uri: grayLb://buildcloud-ai-server
+              predicates: # 断言，作为路由的匹配条件，对应 RouteDefinition 数组
+                - Path=/admin-api/buildcloud-ai/**
+              filters:
+                  - RewritePath=/admin-api/buildcloud-ai/v3/api-docs, /v3/api-docs
           x-forwarded:
             prefix-enabled: false # 避免 Swagger 重复带上额外的 /admin-api/system 前缀
           default-filters:
@@ -103,6 +128,18 @@ knife4j:
       - name: bpm-server
         service-name: bpm-server
         url: /admin-api/bpm/v3/api-docs
+      - name: buildcloud-project-server
+        service-name: buildcloud-project-server
+        url: /admin-api/buildcloud-project/v3/api-docs
+      - name: buildcloud-material-server
+        service-name: buildcloud-material-server
+        url: /admin-api/buildcloud-material/v3/api-docs
+      - name: buildcloud-report-server
+        service-name: buildcloud-report-server
+        url: /admin-api/buildcloud-report/v3/api-docs
+      - name: buildcloud-ai-server
+        service-name: buildcloud-ai-server
+        url: /admin-api/buildcloud-ai/v3/api-docs
 
 --- #################### 芋道相关配置 ####################
 
