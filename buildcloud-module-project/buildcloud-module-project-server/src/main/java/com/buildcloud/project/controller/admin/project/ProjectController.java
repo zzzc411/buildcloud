@@ -31,8 +31,9 @@ import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 /**
  * 管理后台 - 项目
  *
- * 路径 /project/project 经网关 /admin-api 前缀对外暴露：
- * http://127.0.0.1:48080/admin-api/project/project/**
+ * URL 段与基座约定一致（对照 system 的 /system/dict-type）：首段为服务/模块标识，
+ * 经框架 adminApi 前缀（`**.controller.admin.**` → `/admin-api`）对外暴露：
+ * http://127.0.0.1:48080/admin-api/buildcloud-project/project/**
  *
  * 精修相对生成器产物的改动：去掉本次未启用的 Excel 导出（infra 生成器 unit-test/import 默认关闭，
  * 导出留到报表域统一实现，避免 project 服务强依赖 excel starter）；权限标识沿用 project:project:*。
@@ -41,7 +42,7 @@ import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
  */
 @Tag(name = "管理后台 - 项目")
 @RestController
-@RequestMapping("/project/project")
+@RequestMapping("/buildcloud-project/project")
 @Validated
 public class ProjectController {
 
