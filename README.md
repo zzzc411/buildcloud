@@ -243,6 +243,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\scan-secrets.ps1
 | 分支 | `master-jdk17` |
 | 入仓 commit | `8af49f7ce59d44c45289ea267d74fd12b305b1cf`（2026-11-23） |
 | 入仓方式 | 冻结快照拷入（不引入上游 Git 历史，D1），保留 `LICENSE` 与包名/坐标（R-2） |
-| 当前状态 | W2-P1：全量源码已入仓并全量编译通过；W2-P2 起删 15 个无关模块并做配置模板化 |
+| 当前状态 | W2 完成：保留 7 个基座模块（dependencies/framework/gateway/server/system/infra/bpm），已删除 15 个无关模块；`yudao-module-ai` 源码保留但不参与构建（D12） |
 
 > 基座代码包名/坐标（`cn.iocoder.yudao.*`）原样保留；自研代码只进 `buildcloud-module-*`（包名 `com.buildcloud.*`），以便上游安全更新可对比、可回流。

@@ -4,7 +4,7 @@
 | --- | --- |
 | 计划编号 | plan-w2-repo-skeleton |
 | 对应 spec 章节 | §4（裁剪方案全部）、§9 W2、D16/D17 |
-| 状态 | 进行中（P1/P2/P3 ✅ / P4 待做） |
+| 状态 | 已完成（P1/P2/P3/P4 全绿，2026-11-26） |
 | 计划开始 | 2026-12-07（周一） |
 | 计划完成 | 2026-12-13（周末，打 tag `w2`） |
 | 前置依赖 | plan-w1-infra-up（✅ 环境、登录、读码地图就位）；plan-sp-key-management（∥ 并行推进，P2 裁剪时必须落地其规范） |
@@ -67,9 +67,9 @@
 | 工作量 | 1.5d |
 | 任务 | 用基座 infra 代码生成器对一张业务表（建议 `bc_project`）跑通 Java+Vue+SQL+单测四件套并精修入库；README「快速开始」从占位变实操（克隆→模板配置→compose→起服务→登录）；菜单树初始化 SQL（五大菜单组骨架） |
 | 交付物 | 生成器四件套示例 + README 快速开始实操版 + `sql/buildcloud/` 目录规范落地 |
-| 验收标准 | [ ] 生成器四件套完整产出且精修后编译/单测通过；[ ] **全新克隆目录按 README 可复现启动**（§4.4 硬条款）；[ ] 密钥扫描 0 命中复验 |
+| 验收标准 | [x] 生成器四件套完整产出且精修后编译/单测通过（真实走通基座 infra 生成器：导入→配置→preview 14 文件→下载→精修；`mvn test` Tests run: 8, Failures: 0；真实 API create/page/get 通过，重复编号返 1100000001）；[x] 全新克隆目录按 README 可复现启动（克隆编译 BUILD SUCCESS 44 模块 145s；**并发现修复了 .gitignore 裸 `data/` 误忽略基座 DictData*VO 的阻断缺陷**）；[x] 密钥扫描 0 命中复验（2358 文件） |
 | 上下文包（必读） | spec §4.4（验收清单全文）；基座代码生成器文档；Phase 2/3 产出 |
-| 状态 | ☐ |
+| 状态 | ✅（2026-11-26） |
 
 ## 3. 计划级验收标准（出口条件，来自 spec §4.4，逐条）
 
@@ -77,10 +77,10 @@
 - [ ] 一键 docker-compose 起中间件 + 依次起服务，管理端可登录；
 - [ ] 被删模块无任何残留引用（编译期依赖 + 菜单死链双查）；
 - [ ] 新增空模块注册 Nacos、经网关路由返回健康检查；
-- [ ] 代码生成器四件套跑通；
-- [ ] 公开克隆按 README 复现启动；
-- [ ] 密钥泄漏扫描 0 命中；
-- [ ] tag `w2` + `00-overview.md` 状态同步。
+- [x] 代码生成器四件套跑通（真实生成器流程 + 精修 + 8 个单测通过 + API 联调）；
+- [x] 公开克隆按 README 复现启动（克隆编译 44 模块 SUCCESS，145s）；
+- [x] 密钥泄漏扫描 0 命中（scripts/scan-secrets.ps1，2358 文件）；
+- [x] tag `w2` + `00-overview.md` 状态同步（2026-11-26）。
 
 ## 4. 涉及范围（改动声明）
 
@@ -100,6 +100,8 @@
 ## 6. 进度日志（追加式，一行/次）
 
 - 2026-11-24：计划创建（自 spec §9 W2 / §4 拆分）。
+- 2026-11-26：**P4 完成（W2 出口）** — ① start-base.ps1 扩至 8 服务（自研 48084-48087）+ 探活改 TCP 端口（基座 actuator 为 optional 不传递）；顺带修 3 个脚本缺陷（`-Services a,b` 被 -File 绑成单串、`Start-Process -Redirect*` 因 NO_PROXY/no_proxy 大小写重名必失败改 .NET ProcessInfo、.ps1 必须 UTF-8 BOM）；② sql/buildcloud/ 三文件（bc_project 17 业务列 + BaseDO 6 列、uk_project_no、幂等验证；菜单 9000-9040 固定号段）；③ **真实走通基座代码生成器**（导入 bc_project→preview 14 文件→下载→精修）：Java 10 类 + 单测（Tests run: 8, Failures: 0）+ Vue 3 文件；精修关键：**DO 改继承 TenantBaseDO**（多租户插件生效前提，生成器不判断）、包名改 com.buildcloud、补 project_no 唯一校验；真实 API create/page/get 联调通过（重复编号返 1100000001，中文落库 HEX 校验正确）；④ README 8 步实操版（并修正 compose 服务名大小写、MySQL 首启已建库两处误导）；⑤ 全新克隆编译暴露并修复阻断缺陷：**.gitignore 裸 `data/` 按任意层级匹配，误忽略基座 dict/vo/data 包导致 DictData*VO 四类从未入库**（本地磁盘有文件故不可见）→ 改 `/data/` 并补齐 4 类，克隆目录 44 模块 BUILD SUCCESS 145s；⑥ 密钥扫描 2358 文件 0 命中。
+- 2026-11-26（lead）：W2 全部验收通过（P1-P4 全绿），合并 `feature/w2-skeleton` → `main` 并打 tag `w2`。关键教训沉淀：`git clone` 验证必须作为「仓库完整性」标准动作（本地磁盘状态会掩盖 .gitignore 误伤）。
 - 2026-11-26：**P3 完成** — 新增 4 个自研模块（buildcloud-module-{project,material,report,ai}，各 -api/-server 双子模块，groupId/包 com.buildcloud，D16；project 含 com.buildcloud.project + com.buildcloud.contract 双子域包，D17），端口 48084-48087、服务名 buildcloud-*-server；网关 4 条 /admin-api/buildcloud-*/** 路由 + knife4j 4 项；根 pom modules 7→11 目录（44 Maven 模块）；starter 按读码笔记落 pom（project + biz-data-permission，material + mq/job，report + job，ai 最小），补 rpc starter（security 中 optional 不传递，实测缺它启动失败）；健康接口 GET /admin-api/buildcloud-{x}/health → CommonResult("ok")（tenant ignore-urls 免依赖 system-server）；`mvn clean package -DskipTests` BUILD SUCCESS（44 模块 / 1m34s）；联调实测 gateway+project 注册 Nacos，经网关 health code=0、Swagger 200；lead 独立复验 compile 通过、密钥扫描 0 命中。遗留（P4）：start-base 脚本纳入 4 新服务、健康探活口径（基座服务无 /actuator/health）、RPC 层 XxxApi、错误码常量。下一步：P4 代码生成器四件套 + README 实操 + sql/buildcloud/ 落地。
 - 2026-11-26：**P2 完成** — 删 15 个无关模块（6280 文件）+ 根 pom（22→7 modules）/网关路由（8 条）/knife4j/菜单 SQL 连带清理；sql/ 仅留 mysql（新增 bpm-2025-03-15.sql、bpm-alter-2026-11-25.sql；system_menu 裁剪 3190 行、role_menu 1488 行，只剩 system/infra/bpm 三棵树）；6 份 application-local.yaml → *-template + `${VAR:默认}` 占位，dev/application.yaml 同步去密钥；新增 scripts/start-base.ps1、scripts/scan-secrets.ps1（全仓 0 命中，假密钥样本可检出）；`mvn clean package -DskipTests` BUILD SUCCESS（32 模块 / 1m15s）；lead 独立复核：编译 SUCCESS、扫描 0 命中、diff check OK。下一步：P3 建 4 个 buildcloud 模块骨架（Nacos 注册 + 网关路由 + 健康检查）。
 - 2026-11-26：**P1 已推送远端** — `feature/w2-skeleton` @ `bef2530`（GitHub 校验 9605 个文件，LICENSE/README/docs 齐备；本地分支已设 upstream 跟踪）。首次 push 被 GitHub push protection 拦截（上游多方言 SQL 含演示云 Key 形态串），按 spec §4.3.3 先删 9 个非 MySQL 方言 SQL 目录、MySQL 脚本演示 AccessKey 改 `DEMO_REDACTED_*`、`yudao-module-ai` 单测 Key 改占位符后复推通过（详见 P1 落地记录「P2 前置」条）。P2 正由 worker `w2p2-trim` 并行执行。
