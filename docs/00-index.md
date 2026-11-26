@@ -92,8 +92,9 @@ docs/
 | `architecture/reading-notes-rpc.md` | 2026-11-25 | 生效 | 服务间 RPC 读码笔记 |
 | `architecture/reading-notes-bpm-integration.md` | 2026-11-25 | 生效 | BPM 集成模式读码笔记（W3/W4 复刻清单） |
 | `architecture/reading-notes-starter.md` | 2026-11-25 | 生效 | starter 体系读码笔记（自研引用建议） |
-| `ops/deploy-local.md` | 2026-11-25 | 生效 | 本地部署手册 v1（中间件编排与起停） |
+| `ops/deploy-local.md` | 2026-11-25 | 生效 | 本地部署手册 v1（中间件编排 + 服务启动章节） |
 | `ops/middleware-limits.md` | 2026-11-25 | 生效 | 中间件内存限额表与分批启动建议 |
+| `ops/lessons-learned.md` | 2026-11-26 | 生效（v1.0，追加式） | **实战经验与踩坑记录**（环境/基座/流程三类，W0-W2 沉淀；派发上下文包必读） |
 | `interview/qa-bank.md` | 2026-11-25 | 生效 | 面试弹药库 v0.1（九章框架 + 二次开发叙事章） |
 | `decisions/000-template.md` | 2026-11-24 | 生效 | ADR 模板 |
 | `archive/spec-v0.9-raw.md` | 2026-11-24 | 归档 | spec v0.9 原稿 |
