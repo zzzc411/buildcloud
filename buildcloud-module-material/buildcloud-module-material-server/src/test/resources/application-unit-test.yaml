@@ -9,13 +9,23 @@ spring:
   # 数据源配置项
   datasource:
     name: ruoyi-vue-pro
-    url: jdbc:h2:mem:testdb;MODE=MYSQL;DATABASE_TO_UPPER=false;NON_KEYWORDS=value; # MODE 使用 MySQL 模式；DATABASE_TO_UPPER 配置表和字段使用小写
+    # LOCK_TIMEOUT=10000（10 秒）—— 为并发用例显式抬高锁等待上限。
+    # 为什么必须加（W4-P4 实证）：申领 V1 走 `SELECT ... FOR UPDATE` 行锁串行化，
+    # 并发用例里 10 个线程排队抢同一行；H2 的默认 LOCK_TIMEOUT 是 1 秒级，
+    # 队列稍长就会抛 `Timeout trying to lock table`，表现为「随机红」而非业务失败，
+    # 很难与真正的缺陷区分。抬高上限后，锁仍然是行级、仍然串行，只是不会因等待被误判成错误。
+    # 对 P2/P3 的用例无副作用（它们没有超过 1 秒的持锁场景）。
+    url: jdbc:h2:mem:testdb;MODE=MYSQL;DATABASE_TO_UPPER=false;NON_KEYWORDS=value;LOCK_TIMEOUT=10000; # MODE 使用 MySQL 模式；DATABASE_TO_UPPER 配置表和字段使用小写
     driver-class-name: org.h2.Driver
     username: sa
     password:
     druid:
       async-init: true # 单元测试，异步初始化 Druid 连接池，提升启动速度
       initial-size: 1 # 单元测试，配置为 1，提升启动速度
+      # max-active 提到 16：并发用例（W4-P4 的 10 线程申领竞争、W4-P3 的 4 线程入库）需要
+      # 「同时持有连接」的线程数 = 线程数；默认 8 会让多出来的线程卡在等连接上，
+      # 虽然最终也能跑完，但会把「等锁」与「等连接」混在一起，压测/耗时断言失去意义。
+      max-active: 16
   sql:
     init:
       # 故意为空脚本（只有注释）：material 域各子域的表由各自测试类的 @Sql 脚本自备，

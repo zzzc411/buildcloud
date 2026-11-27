@@ -125,3 +125,28 @@ yudao:
       - /admin-api/buildcloud-material/health # 健康检查接口
 
 debug: false
+
+--- #################### 筑云相关配置 ####################
+
+# 筑云 BuildCloud — 材料域自定义配置（读取方：com.buildcloud.material.*）
+buildcloud:
+  material:
+    # 申领链路模式（spec v1.2 §6.1「V1/V2 用配置开关切换（同一接口两实现），保证压测可比」）
+    #
+    # V1 = 行锁同步扣减：同一事务内 SELECT ... FOR UPDATE 锁库存行 → 校验扣减 → 写单据与流水。
+    #      这是**压测对照组**，不是要保留的方案（spec §6.1 原文）。W4 只交付 V1。
+    # V2 = Redis Lua 预扣 + RocketMQ 事务消息 + 异步落库，W5 交付；当前选到会明确返回
+    #      错误码 1-102-070-000（REQUISITION_MODE_NOT_IMPLEMENTED），**绝不静默回退 V1**——
+    #      否则 W5 压测会以为在压 V2、实际压的是 V1，对照实验直接失效。
+    #
+    # 切换方式（压测时不必改仓库文件）：
+    #   启动参数：--buildcloud.material.requisition-mode=V2          ← W4-P4 已实测生效
+    #   环境变量：BUILDCLOUD_MATERIAL_REQUISITION_MODE=V2
+    #   Nacos   ：buildcloud-material-server-local.yaml 追加同名键
+    #
+    # 关于"Nacos 改了是否要重启"（**未实测，不要当结论用**）：
+    #   工厂每次调用都读 Environment（不缓存 @Value），Spring Cloud Alibaba 把 Nacos 变更写回
+    #   Environment 后下一次请求即可读到新值——这是设计意图，但 W4-P4 只实测了启动参数这条路径。
+    #   W5 压测前请先用「改 Nacos → 看 factory 日志/看 submit 行为」验证一次再下结论。
+    # 未配置时按 V1 处理（删掉本行也能跑）。
+    requisition-mode: V1

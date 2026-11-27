@@ -14,7 +14,8 @@ import cn.iocoder.yudao.framework.common.exception.ErrorCode;
  * - 030 段：供应商（bc_supplier）；
  * - 040 段：库存（bc_material_stock）；
  * - 050 段：申领单与明细（bc_requisition / bc_requisition_item）；
- * - 060 段：库存流水（bc_stock_log）。
+ * - 060 段：库存流水（bc_stock_log）；
+ * - 070 段：V1/V2 申领链路开关（spec §6.1「同一接口两实现」，W5 起扩展）。
  *
  * 命名约定与 project 模块一致：`{实体}_NOT_EXISTS` 表示按主键/唯一键查不到；
  * `{实体}_{字段}_DUPLICATE` 表示唯一性冲突（由 Service 层查重或唯一索引捕获后转换）。
@@ -82,8 +83,42 @@ public interface ErrorCodeConstants {
      * 便于前端在按钮误点（如对已完成单据点驳回）时给出可读原因。
      */
     ErrorCode REQUISITION_STATUS_INVALID = new ErrorCode(1_102_050_002, "申领单状态不允许从【{}】流转到【{}】");
+    /**
+     * 申领明细为空
+     *
+     * 一张申领单至少要有一行物料：允许空明细会出现「状态已提交/已扣减但库存一分未动」的空单据，
+     * 既污染申领量统计，也让「已扣减」这个状态失去含义（对账时无法解释）。
+     */
+    ErrorCode REQUISITION_ITEM_EMPTY = new ErrorCode(1_102_050_003, "申领明细不能为空，请至少添加一行物料");
+    /**
+     * 申领明细中的物料重复
+     *
+     * 同一物料在明细里出现两行时，V1 的逐行加锁扣减会**对同一行库存行两次加锁**——
+     * MySQL 下同一事务内第二次 `SELECT ... FOR UPDATE` 是重入的（不报错、直接读到本事务已改的值），
+     * 所以不会死锁，却会让「校验可用量」的语义变得不明显：两行各校验一次 50，
+     * 而实际只需要 100，任一时刻只有第一行校验时库存充足。合并成一行扣减才是唯一清晰的语义。
+     */
+    ErrorCode REQUISITION_ITEM_MATERIAL_DUPLICATE = new ErrorCode(1_102_050_004, "申领明细中物料【{}】重复，请合并为一行");
+    /**
+     * 申领单当前状态不允许取消
+     *
+     * 与 {@link #REQUISITION_STATUS_INVALID} 分开的理由：取消的业务前置是「动过库存的两个状态」，
+     * 前端需要对「已完成/已取消」给出「单据已结束，无需取消」这类明确提示，而不是笼统的「状态流转非法」。
+     */
+    ErrorCode REQUISITION_CANNOT_CANCEL = new ErrorCode(1_102_050_005, "申领单当前状态【{}】不允许取消");
 
     // ========== 库存流水 1-102-060-000 ==========
     ErrorCode STOCK_LOG_NOT_EXISTS = new ErrorCode(1_102_060_000, "库存流水不存在");
+
+    // ========== V1/V2 申领链路开关 1-102-070-000 ==========
+    /**
+     * V2 申领链路尚未实现
+     *
+     * spec §6.1 定义的 V2（Redis Lua 预扣 + RocketMQ 事务消息 + 异步落库）属 W5 交付；
+     * W4 只交付 V1（`SELECT ... FOR UPDATE` 同步扣减，压测对照组）。
+     * 开关存在但选了 V2 时必须**明确报未实现**，绝不能静默回退到 V1——
+     * 否则 W5 压测时会以为在压 V2、实际压的是 V1，对照组与实验组同时失效。
+     */
+    ErrorCode REQUISITION_MODE_NOT_IMPLEMENTED = new ErrorCode(1_102_070_000, "申领链路模式【{}】尚未实现（当前仅支持 V1）");
 
 }

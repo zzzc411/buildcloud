@@ -4,7 +4,7 @@
 | --- | --- |
 | 计划编号 | plan-w4-material-v1 |
 | 对应 spec 章节 | §5.2（材料域设计）、§6.1（V1 定义）、§9 W4 |
-| 状态 | 进行中（P1/P2/P3 ✅ / P4-P6 待做） |
+| 状态 | 进行中（P1/P2/P3/P4 ✅ / P5-P6 待做） |
 | 计划开始 | 2026-12-21（周一） |
 | 计划完成 | 2026-12-27（周末，打 tag `w4`） |
 | 前置依赖 | plan-w3-project-contract（✅ 项目数据与 BPM 集成模式可复用） |
@@ -56,9 +56,9 @@
 | 工作量 | 1.5d |
 | 任务 | 提交申领：同一事务内 `SELECT ... FOR UPDATE` 锁 stock 行 → 校验扣减 → 写 requisition(已扣减)/item + stock_log；实现申领状态机（草稿→已提交→已扣减→已出库→已完成，旁路取消/关闭/部分回退——本 Phase 只做正向+驳回取消）；**V1/V2 配置开关预留**（同一接口两实现，spec §6.1） |
 | 交付物 | 申领 V1 完整实现 + 状态机单测（全流转） |
-| 验收标准 | [ ] 申领→扣减→流水一致（单测）；[ ] 库存不足事务回滚无脏数据；[ ] 状态机非法流转被拒；[ ] V1 开关可切换（V2 占位接口返回未实现） |
+| 验收标准 | [x] 申领→扣减→流水一致（单测 30 条断言 + 真库核对）；[x] 库存不足事务回滚无脏数据（单测 + 网关实证）；[x] 状态机非法流转被拒（canTransfer 全图 21 条边钉死）；[x] V1 开关可切换（V2 占位返回 1-102-070-000，启动参数实测） |
 | 上下文包（必读） | spec §5.2 状态机、§6.1 V1 定义全文；Phase 3 产出 |
-| 状态 | ☐ |
+| 状态 | ✅（2026-11-28） |
 
 ### Phase 5：申领审批流 + 出库/退料闭环
 
@@ -108,3 +108,5 @@
 - 2026-11-27：**P1 完成** — 材料域 7 表建表 SQL（`sql/buildcloud/07-material.sql`，285 行，全 `CREATE TABLE IF NOT EXISTS`；`bc_material_stock` uk(tenant_id,project_id,material_id) + version 乐观锁；`bc_requisition` uk_req_no + timeout_time + approval_status；`bc_stock_log` 分片键 project_id + idx_project_create；数量统一 decimal(18,4)）+ ER 图追加材料域（v0→v0.1，+7 实体 + §3.9-3.14 六条设计取舍）+ 错误码 1-102 段位 13 条。MySQL 实测：连跑 5 次 exit=0 且表数恒 14；中文 HEX 正确。
 - 2026-11-27：**P2 完成**（worker w4p2-basedata）— 目录/物料/供应商三套四件套（25 main + 8 test）：DO 全 extends TenantBaseDO（R-8）、路径 /buildcloud-material/{category,material,supplier}（R-9）；树形 = 一次查全表 + 内存 O(n) 组树（非递归查库），/tree 嵌套 + /list 扁平，孤儿节点提升为根；单测 53 个全绿（模块 77 含 P3）；经网关 21 条 curl 全通过。**修掉一个真 bug**：逻辑删除行仍占 uk 唯一索引 → 删后重建同编码返 500 不可自助；三套 Mapper 加原生 @Select 探测已删行 + Service 抛可读 400，补 3 个回归用例。**该问题的全仓口径已由 lead 决策为 ADR-004**（A 类 Service 校验 / B 类保留索引），W4 收尾出 `08-unique-index-realign.sql` 统一处理。
 - 2026-11-27：**P3 完成**（worker w4p3-stock）— 库存与流水（13 main + 2 test）：入库在同一事务内 upsert stock + 写 stock_log（biz_type=1、quantity 正、balance_after=更新后余额）；**乐观锁用作用域最小的显式 CAS**（`UPDATE ... WHERE id=? AND version=?`，影响行 0 判冲突，重试 3 次退避）——基座未注册 OptimisticLockerInnerInterceptor，注册它会改基座且影响全模块 update（R-2），故选显式 CAS；单测 24 个，实测冲突重试 `version=0→Updates:0` 后成功、总量 115 无丢量；一致性 `available_qty == SUM(quantity)` 真库复核 CONSISTENT；网关联调 inbound(100)+inbound(50.5) → availableQty=150.5、流水 2 条 balanceAfter 100→150.5。下一步：P4 申领 V1 同步链路（压测对照组）。
+- 2026-11-28：**P4 完成**（worker w4p4-requisition）— **申领 V1 同步链路（W5 压测对照组）**：16 个新文件（状态机枚举 3 个 + DO 2 + Mapper 2 + Service + 策略模式 4 个 + Controller + VO 3），单测 32 个（模块 109 全绿）。**V1 故意用 `SELECT ... FOR UPDATE` 行锁同步扣减、不做 CAS 重试**——因为 spec §6.1 明确 V1 是对照组，若偷偷优化成乐观锁则 V1/V2 差异被抹平、W5 压测失效；正确性由行锁保证，`WHERE available_qty >= qty` 留作第二道保险，`version` 仅可观测。**V1/V2 用策略模式**（`RequisitionSubmitHandler` 接口 + V1/V2 两实现 + Factory 按 `buildcloud.material.requisition-mode` 分发），V2 抛 1102070000 零副作用。**并发单测**：库存 50、10 线程各申领 10 → 成功 5/失败 5、stock=0 无超卖、流水 5 条 SUM=-50；另证明**行锁拦不住「同一单扣两次」**（须靠单据状态 CAS）。**V1 基线实测**（非正式压测，仅供 W5 对照）：同热点库存行下 1/5/20 路并发吞吐 12.6/19.0/13.6 rps——**吞吐不随并发扩展甚至回落**，正是行锁串行化的实证。联调全通过（入库→建单→submit→stock 减→流水负数→不足回滚→cancel 回补+冲正 biz_type=4）。**本 Phase 沉淀 5 条新经验**（L1-1f repackage.skip 静默损坏运行中 jar、L1-1g 注解 SQL null 时间参数需 jdbcType、L3-10 只查库断言漏响应体缺陷、L3-11 时间精度需容差）。下一步：P5 申领审批流（含 bpm 转发器）+ 出库/退料。
+- 2026-11-28：**P4 完成**（worker w4p4-requisition）— 申领 V1 同步链路（16 main + 2 test = 18 文件）：`RequisitionStatusEnum` 状态机（0草稿/1已提交/2已扣减/3已出库/4已完成/5部分回退/8已关闭/9已取消，`canTransfer` 单点实现 21 条边 + `canCancel` 窄口径）；`submitRequisition` 同一事务内 ①状态0→1 CAS ②逐条 `SELECT ... FOR UPDATE` 锁库存行 ③校验 available>=qty ④`available_qty -= qty`（**行锁下直接更新，无 CAS 无重试**——spec §6.1 明确 V1 是对照组，改写会毁掉 W5 基线）⑤`biz_type=2` 流水 quantity 负 ⑥状态1→2 CAS；取消 = **状态 CAS + 行锁回补 + biz_type=4 冲正流水**（净额归零）。**V1/V2 开关**：`buildcloud.material.requisition-mode` + 接口两实现 + 工厂，V2 抛 1-102-070-000 **不静默回退**（否则 W5 对照失效）；实测启动参数 `--buildcloud.material.requisition-mode=V2` 生效、submit 返 1102070000 且零副作用。**单测 32 个全绿**（模块 109）；并发用例实测 **10 线程各申领 10 / 库存 50 → 成功 5、失败 5、stock=0、无超卖**，另一用例「同一单 5 并发提交」→ 仅 1 成功（靠状态 CAS 而非行锁拦下）。**网关联调全通过**：入库 100 → 建单 30 → submit → stock 250.5→220.5、流水 quantity=-30 balanceAfter=220.5 biz_no=req_no → 库存不足 99999 返 `1102040001` 且**库存/流水/状态全无变化**（草稿仍 0）→ cancel → 回补 250.5 + biz_type=4 (+30)。真库终态核对：`SUM(stock_log.quantity)=2155.5 == available_qty=2155.5`。**V1 行锁实测基线（W5 对照用）**：直连 48085 同一热点库存行，20 请求 → 并发 1 路 12.6 rps / 5 路 19.0 rps / 20 路 13.6 rps（**吞吐不随并发扩展，锁排队饱和**），avg 79/53/74 ms。修掉 2 个真 bug（列表页见 L4-x）：cancel 响应体 approvalStatus 不同步、timeoutTime 两处 now() 不一致。下一步：P5 申领审批流 + 出库/退料闭环。

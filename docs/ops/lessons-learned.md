@@ -3,7 +3,7 @@
 | 项 | 内容 |
 | --- | --- |
 | 用途 | 沉淀 W0-W8 开发过程中**真实踩到的坑**与验证过的做法，供后续 Phase、子智能体派发上下文包、面试复盘复用 |
-| 版本 | v1.0（覆盖 W0-W2，2026-11-26） |
+| 版本 | v1.1（覆盖 W0-W4，2026-11-28；38 条） |
 | 迭代方式 | **追加式**：每个 Phase 收尾时追加条目，不删旧条目（已失效的标记「已失效」并注明原因） |
 | 定位 | 不是教程，是「本项目在这台机器、这套基座上，什么会真的坏」的证据清单 |
 
@@ -37,7 +37,23 @@
 
 **现象**：`install` 在 `spring-boot:repackage` 阶段失败 `Unable to rename ...jar to ...jar.original`。
 **原因**：另一个进程正持有该 jar 文件句柄（服务还在跑）。
-**修复**：先停服务；或临时加 `-Dspring-boot.repackage.skip=true`（仅验证编译时）。**不要为了打包去 kill 生产/演示进程**——先问。
+**修复**：**先停自己的服务**再打包。**不要为了打包去 kill 别人的/生产进程**——先问。
+
+> ⚠️ **本条曾被错误地建议为「临时加 `-Dspring-boot.repackage.skip=true`」——该做法有害，见 L1-1f。**
+> **正解**：停服务 → 完整打包（不带 skip）→ 重启验证。
+
+### L1-1f `-Dspring-boot.repackage.skip=true` 会静默损坏运行中的服务（比直接失败更危险）
+
+**现象**：服务进程还活着、端口还监听，但**所有请求超时**；`logs/*.err.log` 出现 `NoClassDefFoundError: ch/qos/logback/classic/spi/ThrowableProxy`；**jar 从 ~150MB 变成 156KB**。
+**根因**：`repackage.skip` 只跳过 `repackage` 阶段，**不跳 `jar:jar`**。`jar:jar` 会把 `target/classes` 打成 **thin jar** 并**覆盖同名文件**。运行中的 JVM 已加载的类还在内存里，但**懒加载的类**（如只在异常日志路径才用的 `ThrowableProxy`）之后去 classpath 找已经找不到——所以不是启动即崩，而是**跑了很久后某条冷路径才炸**。
+**修复三步**：① 停自己的服务；② 不带 skip 重打 fat jar（确认 150MB 左右）；③ 重启并 `curl health` 验证。
+**影响面**：所有「一边跑服务一边 install」的联调。**这条修正了 L1-1c 的旧表述**——skip 不是「安全地只编译」，是「静默把 fat jar 换成 thin jar」。
+
+### L1-1g MyBatis 注解 SQL 传 null 时间参数必须声明 `jdbcType`
+
+**现象**：`updateStatusCas(..., timeoutTime=null)` 报 `JdbcType OTHER` 无法绑定。
+**修复**：`COALESCE(#{timeoutTime,jdbcType=TIMESTAMP}, timeout_time)`。
+**影响面**：所有「注解 SQL + 可空参数」。H2 下必现，MySQL 下偶发。
 
 ### L1-1d PowerShell 5.1 的 `Invoke-RestMethod` 会把中文 body 转成 `?`
 
@@ -282,6 +298,21 @@ Long countByCodeIncludeDeleted(@Param("code") String code);
 **现象**：W4-P3 联调时发现 48080/48081/48082/48083 被另一 worker 停掉（对方要打包，怕 jar 占用）。
 **处置**：并行派发时，**在上下文包里明确「不要杀别人的服务进程；端口已监听就复用」**；或给 worker 指定不同端口段。
 **根因**：L1-1c（运行中 jar 阻塞 repackage）的正确解法是「停自己的服务」而非「杀所有 java 进程」。
+
+### L3-10 「先查库再断言」会漏掉响应体缺陷（本阶段最有价值的一条）
+
+**现象**：`cancel` 接口响应体返回 `approvalStatus: -1`，而库里是 `4`。单测原本 30 个全绿——因为断言写的是 `mapper.selectById(id)`（**重查库，天然正确值**）。
+**根因**：状态推进走 CAS SQL 直接改库，Service 内存 DO 只回填了 `status`，忘了 `approvalStatus`；`timeoutTime` 两处各调 `LocalDateTime.now()` 导致值不一致。
+**修复**：逐字段回填 + 时间只算一次复用；补 2 个**只断言 Service 返回值**的回归用例。
+**通用教训**：**验收必须至少有一条「断言 Service 返回值 == 库值」**，否则「库里对、响应体错」整类缺陷完全不可见。
+**影响面**：所有走 CAS / 手写 SQL 改状态的 Service（W3 的审批回调、W5 的扣减都有此风险）。
+
+### L3-11 时间字段跨库往返会掉精度，断言必须用容差
+
+**现象**：`assertEquals(库值, 返回值)` 差 200 纳秒失败（`...358167` vs `...358167200`）。
+**根因**：Java `LocalDateTime` 纳秒精度 vs MySQL `datetime` 秒精度 / H2 `timestamp` 微秒精度。
+**修复**：`Duration.between(a, b).abs().toMillis() < 1` 之类容差比，不用 `assertEquals`。
+**影响面**：所有时间字段的断言。
 
 ---
 
