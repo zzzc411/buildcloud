@@ -4,7 +4,7 @@
 | --- | --- |
 | 计划编号 | plan-w4-material-v1 |
 | 对应 spec 章节 | §5.2（材料域设计）、§6.1（V1 定义）、§9 W4 |
-| 状态 | 未开始 |
+| 状态 | 进行中（P1 ✅ / P2-P6 待做） |
 | 计划开始 | 2026-12-21（周一） |
 | 计划完成 | 2026-12-27（周末，打 tag `w4`） |
 | 前置依赖 | plan-w3-project-contract（✅ 项目数据与 BPM 集成模式可复用） |
@@ -23,9 +23,9 @@
 | 工作量 | 0.5d |
 | 任务 | `bc_material_category / bc_material / bc_supplier / bc_material_stock / bc_requisition / bc_requisition_item / bc_stock_log` 建表（stock：available_qty/locked_qty/version 乐观锁；requisition：req_no 唯一索引；stock_log：biz_type/biz_no/数量±/变动后余额）；错误码段 material 1-102；ER 图并入 `er-diagram` |
 | 交付物 | `sql/buildcloud/material.sql` + ER 图更新 + 错误码常量 |
-| 验收标准 | [ ] 7 表字段覆盖 spec §5.2；[ ] 唯一约束与乐观锁列就位；[ ] SQL 幂等 |
+| 验收标准 | [x] 7 表字段覆盖 spec §5.2（逐字段对照全齐）；[x] 唯一约束与乐观锁列就位（`uk_project_material(tenant_id,project_id,material_id)` + `version`；`uk_req_no`；`bc_stock_log` 分片键 project_id + `idx_project_create`）；[x] SQL 幂等（连跑 5 次 exit=0，表数恒 14）；[x] 附加：ER 图追加材料域（v0→v0.1，+7 实体 +6 条设计取舍）、错误码 1-102 段位 13 条、中文 HEX 校验通过 |
 | 上下文包（必读） | spec §5.2、§7.2；W3 Phase 1 的 ER 规范 |
-| 状态 | ☐ |
+| 状态 | ✅（2026-11-27） |
 
 ### Phase 2：基础数据 CRUD（目录/物料/供应商）
 
@@ -106,3 +106,4 @@
 ## 6. 进度日志（追加式，一行/次）
 
 - 2026-11-24：计划创建（自 spec §9 W4 / §5.2 / §6.1 拆分）。
+- 2026-11-27：**P1 完成** — 材料域 7 表建表 SQL（`sql/buildcloud/07-material.sql`，285 行，全 `CREATE TABLE IF NOT EXISTS`；`bc_material_stock` uk(tenant_id,project_id,material_id) + version 乐观锁；`bc_requisition` uk_req_no + timeout_time + approval_status；`bc_stock_log` 分片键 project_id + idx_project_create；数量统一 decimal(18,4)）+ ER 图追加材料域（v0→v0.1，+7 实体 + §3.9-3.14 六条设计取舍：project_id 分片键理由/available vs locked/quantity 正负号/不建物理外键/decimal(18,4)/W4-W6 待复核 3 项）+ 错误码 1-102 段位 13 条。MySQL 实测：连跑 5 次 exit=0 且表数恒 14；中文 HEX=E5BBBAE7AD91E69D90E69699 正确。下一步：P2 基础数据 + P3 入库库存（可 ∥）。

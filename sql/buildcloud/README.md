@@ -14,11 +14,12 @@
 | 3 | `03-contract.sql` | 合同资金子域建表：`bc_contract`、`bc_contract_payment_plan`、`bc_contract_payment_record`、`bc_contract_change` | 同上（`contract.project_id` 逻辑关联 `bc_project`，不建物理外键） |
 | 4 | `04-project-approval.sql` | `bc_project` 补两列：`process_instance_id`（关联 Flowable 流程实例）、`approval_status`（复用 `BpmProcessInstanceStatusEnum` 值域） | `01-project.sql` 已执行；`bpm_process_definition_info` 表已存在 |
 | 5 | `05-bpm-seed.sql` | BPM 业务配置种子数据：`bpm_category` 4 条施工业务分类（PROJECT/FINANCE/MATERIAL/ADMIN）、`bpm_user_group` 3 个审批人用户组 | 基座 `bpm_category`/`bpm_user_group` 表已建（`sql/mysql/bpm-*.sql`） |
+| 6 | `06-contract-approval.sql` | `bc_contract` 补审批关联列（`process_instance_id` / `approval_status`） | `03-contract.sql` 已执行 |
+| 7 | `07-material.sql` | 材料域建表：`bc_material_category`（树形目录）、`bc_material`（物料）、`bc_supplier`（供应商）、`bc_material_stock`（库存，available_qty/locked_qty/version）、`bc_requisition`（申领单）、`bc_requisition_item`（明细）、`bc_stock_log`（流水，W6 分库分表主表） | 同上（`project_id` / `material_id` 逻辑关联，不建物理外键） |
 
-> 后续按 spec §7.1 继续追加：`04-material.sql`（材料域 7 张）、
-> `05-report.sql`（报表域 1 张）、`06-ai.sql`（AI 域 3 张 + pgvector chunk 表）。
+> 后续按 spec §7.1 继续追加：`08-report.sql`（报表域 1 张）、`09-ai.sql`（AI 域 3 张 + pgvector chunk 表）。
 > 域内结构变更用 `0N-xxx-alter-YYYY-MM-DD.sql`（幂等：先查 `INFORMATION_SCHEMA` 再 `ALTER`）。
-> 字段与 spec §5.1 的逐项对照、ER 图与设计取舍见 `docs/architecture/er-diagram-v0.md`。
+> 字段与 spec §5.1 / §5.2 的逐项对照、ER 图与设计取舍见 `docs/architecture/er-diagram-v0.md`。
 > **每个文件只增不改**；结构变更另起 `0N-xxx-alter-YYYY-MM-DD.sql`，不原地改写历史脚本。
 
 ## 执行方式
