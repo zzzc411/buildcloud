@@ -1,0 +1,25 @@
+-- =====================================================================================
+-- 单元测试 H2 建表脚本（MODE=MYSQL）—— **本文件只建基座无关的占位，不建业务表**
+--
+-- 为什么几乎为空：
+--   BaseDbUnitTest 硬依赖 application-unit-test.yaml 的
+--   spring.sql.init.schema-locations，必须有一个存在的文件（没有会让上下文启动失败）。
+--   但 material 域有多个并行子域（W4-P2 目录/物料/供应商、W4-P3 库存/流水、W4-P4 申领），
+--   若各 worker 都往这一个文件里加表，必然产生写冲突。
+--
+-- 因此约定（与 project 模块的 contract-test-tables.sql 同思路）：
+--   **各子域自备建表脚本，由自己的测试类用 @Sql(BEFORE_TEST_METHOD) 引入**：
+--     - sql/material-test-tables.sql —— bc_material_category / bc_material / bc_supplier（W4-P2）
+--     - sql/stock-test-tables.sql    —— bc_material_stock / bc_stock_log（W4-P3）
+--   每个脚本内部先 DROP TABLE IF EXISTS 再 CREATE，每次测试方法前置阶段重建，
+--   天然起到「清数据」作用，用例之间不串数据。
+--
+-- 为什么下面必须留一条 SELECT 1：
+--   Spring 的 ScriptUtils.splitSqlScript 在「去掉注释后内容为空」时直接抛
+--   IllegalArgumentException: 'script' must not be null or empty（实测踩到，见进度日志）。
+--   故留一条完全无副作用的 SELECT 1 满足「非空」约束，同时不产生任何 DDL 副作用。
+--
+-- 效果：本文件与 clean.sql 都不需要任何人再改，并行 worker 之间零冲突。
+-- =====================================================================================
+
+SELECT 1;

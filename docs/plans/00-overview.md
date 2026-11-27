@@ -65,7 +65,7 @@ spec v1.2（范围与排期唯一依据）
 | [plan-w1-infra-up.md](plan-w1-infra-up.md) | W1（11-30 ~ 12-06） | W0 ✅ | 3 | ✅ 已完成（P1/P2/P3 全绿，tag `w1`） | — |
 | [plan-w2-repo-skeleton.md](plan-w2-repo-skeleton.md) | W2（12-07 ~ 12-13） | W1；∥ sp-key | 4 | ✅ 已完成（P1-P4 全绿，tag `w2`） | 2026-11-26 |
 | [plan-w3-project-contract.md](plan-w3-project-contract.md) | W3（12-14 ~ 12-20） | W2 | 5（P2∥P3） | ✅ 已完成（P1-P5 全绿，tag `w3`） | 2026-11-27 |
-| [plan-w4-material-v1.md](plan-w4-material-v1.md) | W4（12-21 ~ 12-27） | W3 | 6 | 🔄 进行中（P1 ✅） | — |
+| [plan-w4-material-v1.md](plan-w4-material-v1.md) | W4（12-21 ~ 12-27） | W3 | 6 | 🔄 进行中（P1/P2/P3 ✅） | — |
 | [plan-w5-concurrent-v2.md](plan-w5-concurrent-v2.md) | W5（12-28 ~ 01-03） | W4 | 6（P5∥） | 未开始 | — |
 | [plan-w6-consistency-report.md](plan-w6-consistency-report.md) | W6（01-04 ~ 01-10） | W5；sp-seeding（硬） | 5（P1-P3∥） | 未开始 | — |
 | [plan-w7-ai-rag.md](plan-w7-ai-rag.md) | W7（01-11 ~ 01-17） | W2 骨架；sp-key；可提前并行 | 5（P4∥） | 未开始 | — |
@@ -98,7 +98,7 @@ spec v1.2（范围与排期唯一依据）
 | W1 | infra-up | ✅ 已完成 | 3/3 | P1/P2/P3 全绿（2026-11-25，tag `w1`）；MinIO 已切 Bitnami 归档镜像；可登录演示（2048） |
 | W2 | repo-skeleton | ✅ 已完成 | 4/4 | P1 入仓 → P2 裁剪+模板化 → P3 四模块（48084-48087）→ P4 生成器四件套；44 模块编译通过；修复 .gitignore 阻断缺陷；tag `w2` |
 | W3 | project-contract | ✅ 已完成 | 5/5 | P1 表/ER → P2 项目子域 → P3 合同子域 → **P4 立项审批** → **P5 进度款审批**；173 tests 全绿；两条审批链端到端真实跑通；tag `w3` |
-| W4 | material-v1 | 🔄 进行中 | 1/6 | P1 ✅ 7 表 SQL（14 表）+ ER v0.1 + 错误码 1-102；P2/P3 可 ∥ |
+| W4 | material-v1 | 🔄 进行中 | 3/6 | P1 ✅ 7 表+ER v0.1；P2 ✅ 目录/物料/供应商（53 单测）；P3 ✅ 库存+流水（乐观锁显式 CAS，24 单测）；77 tests 全绿；ADR-004 决策唯一索引口径 |
 | W5 | concurrent-v2 | ⬜ 未开始 | 0/6 | P5∥ |
 | W6 | consistency-report | ⬜ 未开始 | 0/5 | P1-P3∥；依赖 sp-seeding |
 | W7 | ai-rag | ⬜ 未开始 | 0/5 | 可提前并行 |

@@ -1,0 +1,61 @@
+spring:
+  main:
+    lazy-initialization: true # 开启懒加载，加快速度
+    banner-mode: off # 单元测试，禁用 Banner
+
+--- #################### 数据库相关配置 ####################
+
+spring:
+  # 数据源配置项
+  datasource:
+    name: ruoyi-vue-pro
+    url: jdbc:h2:mem:testdb;MODE=MYSQL;DATABASE_TO_UPPER=false;NON_KEYWORDS=value; # MODE 使用 MySQL 模式；DATABASE_TO_UPPER 配置表和字段使用小写
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+    druid:
+      async-init: true # 单元测试，异步初始化 Druid 连接池，提升启动速度
+      initial-size: 1 # 单元测试，配置为 1，提升启动速度
+  sql:
+    init:
+      # 故意为空脚本（只有注释）：material 域各子域的表由各自测试类的 @Sql 脚本自备，
+      # 见 src/test/resources/sql/material-test-tables.sql（P2：目录/物料/供应商）
+      # 与 src/test/resources/sql/stock-test-tables.sql（P3：库存/流水）。
+      schema-locations: classpath:/sql/create_tables.sql
+
+  # Redis 配置。Redisson 默认的配置足够使用，一般不需要进行调优
+  data:
+    redis:
+      host: 127.0.0.1 # 地址
+      port: 16379 # 端口（与 docker/.env 的 REDIS_HOST_PORT 一致）
+      database: 0 # 数据库索引
+
+mybatis-plus:
+  lazy-initialization: true # 单元测试，设置 MyBatis Mapper 延迟加载，加速每个单元测试
+  # material 域只有一个顶层子包 material.dal.dataobject，category / material / supplier / stock
+  # 的 DO 全在其下，故一个值即可覆盖全部子域（对照 L1-1e：project 服务因有 project/contract
+  # 两个顶层域才必须逐个列；本模块不适用，不要照抄成两段）
+  type-aliases-package: ${yudao.info.base-package}.material.dal.dataobject
+  global-config:
+    db-config:
+      id-type: AUTO # H2 主键递增
+
+--- #################### 定时任务相关配置 ####################
+
+--- #################### 配置中心相关配置 ####################
+
+--- #################### 服务保障相关配置 ####################
+
+# Lock4j 配置项（单元测试，禁用 Lock4j）
+
+--- #################### 监控相关配置 ####################
+
+--- #################### 筑云相关配置 ####################
+
+# 筑云配置项，设置当前模块所有自定义的配置
+yudao:
+  info:
+    # 取 com.buildcloud（而非某个子包）：基座 @MapperScan 以此为扫描根，
+    # material 域当前只有 material 一个顶层域，但保持与主 application.yaml 一致，
+    # 后续若再拆顶层域（如 material 内再分独立域）无需再改测试配置
+    base-package: com.buildcloud

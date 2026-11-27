@@ -1,0 +1,22 @@
+-- =====================================================================================
+-- 单元测试结束后的清理脚本 —— **本文件不做任何清理**
+--
+-- 为什么不做清理：
+--   BaseDbUnitTest 通过 @Sql(scripts = "/sql/clean.sql", executionPhase = AFTER_TEST_METHOD)
+--   硬依赖本文件存在（不存在会让每个用例结束时抛 ScriptStatementFailedException）。
+--   但 material 域的测试表按子域分散在 material-test-tables.sql / stock-test-tables.sql 里，
+--   且每个脚本都是「DROP TABLE IF EXISTS + CREATE」，**前置阶段已重建表**，数据天然隔离。
+--
+--   若在这里写 DELETE FROM 具体表：跑 A 子域的测试时，B 子域的表可能尚未创建，
+--   DELETE 会报 `Table "BC_XXX" not found` —— 反而把「零共享」的隔离性破坏掉。
+--
+-- 为什么必须留一条 SELECT 1：
+--   Spring ScriptUtils 在「去掉注释后内容为空」时抛
+--   IllegalArgumentException: 'script' must not be null or empty（实测踩到）。
+--   留一条无副作用语句满足非空约束。
+--
+-- 结论：新增子域测试时**不要**往这里加 DELETE，
+--       改为在自己的 xxx-test-tables.sql 里做 DROP+CREATE。
+-- =====================================================================================
+
+SELECT 1;

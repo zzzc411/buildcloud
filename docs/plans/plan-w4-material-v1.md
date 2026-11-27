@@ -4,7 +4,7 @@
 | --- | --- |
 | 计划编号 | plan-w4-material-v1 |
 | 对应 spec 章节 | §5.2（材料域设计）、§6.1（V1 定义）、§9 W4 |
-| 状态 | 进行中（P1 ✅ / P2-P6 待做） |
+| 状态 | 进行中（P1/P2/P3 ✅ / P4-P6 待做） |
 | 计划开始 | 2026-12-21（周一） |
 | 计划完成 | 2026-12-27（周末，打 tag `w4`） |
 | 前置依赖 | plan-w3-project-contract（✅ 项目数据与 BPM 集成模式可复用） |
@@ -34,9 +34,9 @@
 | 工作量 | 1.5d |
 | 任务 | 树形目录维护、物料（编码/规格/单位）、供应商；前端页面 + 菜单接入 |
 | 交付物 | 三类基础数据维护功能 + 单测 |
-| 验收标准 | [ ] 树形目录增删改正确；[ ] 物料编码唯一校验；[ ] 分页查询可用 |
+| 验收标准 | [x] 树形目录增删改正确（一次查全表 + 内存 O(n) 组树，`/tree` 嵌套 + `/list` 扁平；孤儿节点提升为根、叶子 children 空数组）；[x] 物料编码唯一校验（含逻辑删除行探测，见 ADR-004）；[x] 分页查询可用（name/material_no/spec 模糊 + category 筛选）；[x] 附加：单测 53 个（category 24/material 17/supplier 12）；经网关 21 条 curl 全通过；**联调修掉逻辑删除 vs 唯一索引 500 缺陷** |
 | 上下文包（必读） | spec §5.2；基座树形组件参考（只读）；W2 生成器示例 |
-| 状态 | ☐ |
+| 状态 | ✅（2026-11-27） |
 
 ### Phase 3：入库与库存管理
 
@@ -45,9 +45,9 @@
 | 工作量 | 1d |
 | 任务 | 入库：同一事务写 `bc_material_stock`（项目+物料 唯一，version 乐观锁）+ `bc_stock_log` 入库流水；库存查询 |
 | 交付物 | 入库功能 + 库存流水单测（含并发乐观锁重试） |
-| 验收标准 | [ ] 入库后 stock 与 stock_log 余额一致（单测断言）；[ ] 乐观锁冲突可重试；[ ] 同项目同物料库存行唯一 |
+| 验收标准 | [x] 入库后 stock 与 stock_log 余额一致（单测断言 `available_qty == SUM(quantity)`）；[x] 乐观锁冲突可重试（显式 CAS `WHERE version=#{version}`，影响行 0 → 重试 3 次退避；实测日志 `version=0 → Updates: 0` 后重试成功，总量 115=100+10+5 无丢量）；[x] 同项目同物料库存行唯一（uk 保证）；[x] 附加：单测 24 个；网关联调 inbound 100 + 50.5 → availableQty=150.5、流水 2 条 balanceAfter 递增 |
 | 上下文包（必读） | spec §5.2 实体、§6.1（V1 事务边界）；Phase 1 SQL |
-| 状态 | ☐ |
+| 状态 | ✅（2026-11-27） |
 
 ### Phase 4：申领 V1 同步链路（压测对照组）
 
@@ -105,5 +105,6 @@
 
 ## 6. 进度日志（追加式，一行/次）
 
-- 2026-11-24：计划创建（自 spec §9 W4 / §5.2 / §6.1 拆分）。
-- 2026-11-27：**P1 完成** — 材料域 7 表建表 SQL（`sql/buildcloud/07-material.sql`，285 行，全 `CREATE TABLE IF NOT EXISTS`；`bc_material_stock` uk(tenant_id,project_id,material_id) + version 乐观锁；`bc_requisition` uk_req_no + timeout_time + approval_status；`bc_stock_log` 分片键 project_id + idx_project_create；数量统一 decimal(18,4)）+ ER 图追加材料域（v0→v0.1，+7 实体 + §3.9-3.14 六条设计取舍：project_id 分片键理由/available vs locked/quantity 正负号/不建物理外键/decimal(18,4)/W4-W6 待复核 3 项）+ 错误码 1-102 段位 13 条。MySQL 实测：连跑 5 次 exit=0 且表数恒 14；中文 HEX=E5BBBAE7AD91E69D90E69699 正确。下一步：P2 基础数据 + P3 入库库存（可 ∥）。
+- 2026-11-27：**P1 完成** — 材料域 7 表建表 SQL（`sql/buildcloud/07-material.sql`，285 行，全 `CREATE TABLE IF NOT EXISTS`；`bc_material_stock` uk(tenant_id,project_id,material_id) + version 乐观锁；`bc_requisition` uk_req_no + timeout_time + approval_status；`bc_stock_log` 分片键 project_id + idx_project_create；数量统一 decimal(18,4)）+ ER 图追加材料域（v0→v0.1，+7 实体 + §3.9-3.14 六条设计取舍）+ 错误码 1-102 段位 13 条。MySQL 实测：连跑 5 次 exit=0 且表数恒 14；中文 HEX 正确。
+- 2026-11-27：**P2 完成**（worker w4p2-basedata）— 目录/物料/供应商三套四件套（25 main + 8 test）：DO 全 extends TenantBaseDO（R-8）、路径 /buildcloud-material/{category,material,supplier}（R-9）；树形 = 一次查全表 + 内存 O(n) 组树（非递归查库），/tree 嵌套 + /list 扁平，孤儿节点提升为根；单测 53 个全绿（模块 77 含 P3）；经网关 21 条 curl 全通过。**修掉一个真 bug**：逻辑删除行仍占 uk 唯一索引 → 删后重建同编码返 500 不可自助；三套 Mapper 加原生 @Select 探测已删行 + Service 抛可读 400，补 3 个回归用例。**该问题的全仓口径已由 lead 决策为 ADR-004**（A 类 Service 校验 / B 类保留索引），W4 收尾出 `08-unique-index-realign.sql` 统一处理。
+- 2026-11-27：**P3 完成**（worker w4p3-stock）— 库存与流水（13 main + 2 test）：入库在同一事务内 upsert stock + 写 stock_log（biz_type=1、quantity 正、balance_after=更新后余额）；**乐观锁用作用域最小的显式 CAS**（`UPDATE ... WHERE id=? AND version=?`，影响行 0 判冲突，重试 3 次退避）——基座未注册 OptimisticLockerInnerInterceptor，注册它会改基座且影响全模块 update（R-2），故选显式 CAS；单测 24 个，实测冲突重试 `version=0→Updates:0` 后成功、总量 115 无丢量；一致性 `available_qty == SUM(quantity)` 真库复核 CONSISTENT；网关联调 inbound(100)+inbound(50.5) → availableQty=150.5、流水 2 条 balanceAfter 100→150.5。下一步：P4 申领 V1 同步链路（压测对照组）。

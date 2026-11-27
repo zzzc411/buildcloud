@@ -258,6 +258,31 @@ W2-P2/P4 worker 能自主发现 3 个脚本缺陷，部分得益于上下文里�
 W1 读码发现 spec 两处与基座现状不符 → 升 v1.2（D23）而不是偷偷改代码；W2 裁剪后 `.gitignore` 缺陷 → 单独 `fix:` 提交而非混进 `feat:`。
 **价值**：面试讲「我怎么处理需求与现实冲突」时，有 ADR 与变更记录作为证据链。
 
+### L3-7 逻辑删除 + 唯一索引 = 500 灾难（W4-P2 实证，全仓口径）
+
+**现象**：删除材料目录 `STEEL` 后重建同编码 → `{"code":500,"msg":"系统异常"}`，用户无法自助。
+**根因链**：① 逻辑删除（`deleted=1`）；② **MySQL 唯一索引不感知 `deleted`**，已删行仍占位；③ Service 的 `selectByCode` 被逻辑删除插件过滤看不到已删行 → 校验通过 → INSERT 撞索引 → 500。
+**关键实证**：基座 `system_users`/`system_role`/`system_dict_type` **只有 PRIMARY，没有任何业务唯一索引**——基座唯一性 100% 靠 Service 层。**这个坑是我们「比基座更严」引入的。**
+**处置**：见 **ADR-004** 混合口径——A 类（编码/单号，人可重建）用 Service 校验**查已删行** + 可读报错；B 类（结构唯一，如 `stock(project,material)`）保留索引作**并发防线**（高并发热点表必须有硬约束）。
+**A 类探测 SQL 必须绕过逻辑删除插件**：
+```java
+@Select("SELECT COUNT(*) FROM bc_xxx WHERE code = #{code}")  // 原生 SQL 能看到已删行
+Long countByCodeIncludeDeleted(@Param("code") String code);
+```
+**影响面**：`bc_project.uk_project_no`、`bc_contract.uk_contract_no`、`bc_material*.uk_*`、`bc_supplier.uk_supplier_no`、`bc_requisition.uk_req_no`。W4 收尾需出 `08-unique-index-realign.sql` 统一口径。
+
+### L3-8 空的 `.sql` 脚本会让 Spring 直接炸
+
+**现象**：H2 单测 50 个全 ERROR，`IllegalArgumentException: 'script' must not be null or empty`。
+**原因**：`ScriptUtils.splitSqlScript` 去掉注释后内容为空即抛错——**注释不算内容**。
+**修复**：`create_tables.sql`/`clean.sql` 即使「本模块不建业务表」，也必须留一条无副作用的 `SELECT 1;`。
+
+### L3-9 并行 worker 会互相停掉对方起的服务
+
+**现象**：W4-P3 联调时发现 48080/48081/48082/48083 被另一 worker 停掉（对方要打包，怕 jar 占用）。
+**处置**：并行派发时，**在上下文包里明确「不要杀别人的服务进程；端口已监听就复用」**；或给 worker 指定不同端口段。
+**根因**：L1-1c（运行中 jar 阻塞 repackage）的正确解法是「停自己的服务」而非「杀所有 java 进程」。
+
 ---
 
 ## 四、待验证 / 已知未闭环

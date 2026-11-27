@@ -53,6 +53,23 @@ public interface ErrorCodeConstants {
      * 提示语带上可用量与需求量，便于前端直接给出「库存不足」的量化说明。
      */
     ErrorCode STOCK_NOT_ENOUGH = new ErrorCode(1_102_040_001, "库存不足（可用 {}，需要 {}）");
+    /**
+     * 入库数量非法（必须 > 0）
+     *
+     * 入库只走正向增量（biz_type=1，quantity 记正数）；减少库存必须走申领扣减(2)/退回(3)/冲正(4)，
+     * 各自由对应业务链路写入并留痕。若允许「负数入库」，则同一笔业务既可能是入库也可能是出库，
+     * 流水的 biz_type 就失去意义，对账时也无法按类型分组核对（spec §5.2 流水口径）。
+     */
+    ErrorCode STOCK_INBOUND_QUANTITY_INVALID = new ErrorCode(1_102_040_002, "入库数量必须大于 0（当前 {}）");
+    /**
+     * 库存乐观锁冲突重试耗尽
+     *
+     * 入库用 `UPDATE ... WHERE id = ? AND version = ?` 条件更新，影响行数 0 表示该行在
+     * 「读版本 → 条件更新」之间被其它事务改过（version 已前进）。有限次重试后仍冲突说明热点极端
+     * （同一项目同一物料被高频并发写入），此时快速失败比无限重试更安全——避免请求线程被拖死、
+     * 连接池被耗尽。提示语带上重试次数，便于压测时定位热点。
+     */
+    ErrorCode STOCK_UPDATE_CONFLICT = new ErrorCode(1_102_040_003, "库存更新冲突，已重试 {} 次仍失败，请稍后重试");
 
     // ========== 申领单 1-102-050-000 ==========
     ErrorCode REQUISITION_NOT_EXISTS = new ErrorCode(1_102_050_000, "材料申领单不存在");
