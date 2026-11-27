@@ -79,9 +79,16 @@ public enum ContractStatusEnum implements ArrayValuable<Integer> {
      *
      * 合法边：
      * 草稿 → 审批中 / 已作废；
-     * 审批中 → 履行中 / 已作废（驳回退回草稿由审批回调处理，本期未接入 BPM，故不设 审批中 → 草稿）；
+     * 审批中 → 履行中 / **草稿（进度款审批驳回/取消，W3-P5 接入）** / 已作废；
      * 履行中 → 已结算 / 已作废；
      * 已结算、已作废为终态，无出边。
+     *
+     * 关于「审批中 → 草稿」：W3-P3 建这条状态机时审批回调还没接入，故当时没设这条边
+     * （见旧注释）；W3-P5 接入 payment-approve 后，驳回/取消的业务语义就是「本期进度款申请未通过，
+     * 合同退回可编辑的草稿，修改金额或期次后重新提交」，因此补上这条边。
+     * 它只对「首次申请（草稿→审批中）」有意义；已在履行中的合同追加期次时驳回**不回退草稿**
+     * （否则一份已收款的在履行合同会变回可删除的草稿，台账口径直接崩），见
+     * {@code ContractApprovalServiceImpl#handleApprovalResult}。
      *
      * @param from 当前状态
      * @param to   目标状态
@@ -95,7 +102,7 @@ public enum ContractStatusEnum implements ArrayValuable<Integer> {
             return APPROVING.status.equals(to) || VOIDED.status.equals(to);
         }
         if (APPROVING.status.equals(from)) {
-            return PERFORMING.status.equals(to) || VOIDED.status.equals(to);
+            return PERFORMING.status.equals(to) || DRAFT.status.equals(to) || VOIDED.status.equals(to);
         }
         if (PERFORMING.status.equals(from)) {
             return SETTLED.status.equals(to) || VOIDED.status.equals(to);

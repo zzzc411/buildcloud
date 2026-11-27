@@ -34,6 +34,11 @@ CREATE TABLE IF NOT EXISTS "bc_contract"
     "party_b"       varchar(200)   DEFAULT NULL,
     "paid_amount"   decimal(18, 2) NOT NULL DEFAULT 0.00,
     "remark"        varchar(500)   DEFAULT NULL,
+    -- 进度款审批关联列（W3-P5，与 sql/buildcloud/06-contract-approval.sql 一致）
+    "process_instance_id"     varchar(64)    DEFAULT NULL,
+    "approval_status"         tinyint        NOT NULL DEFAULT -1,
+    "pending_payment_amount"  decimal(18, 2) DEFAULT NULL,
+    "pending_period"          int            DEFAULT NULL,
 
     "tenant_id"     bigint         NOT NULL DEFAULT 0,
     "creator"       varchar(64)    DEFAULT '',

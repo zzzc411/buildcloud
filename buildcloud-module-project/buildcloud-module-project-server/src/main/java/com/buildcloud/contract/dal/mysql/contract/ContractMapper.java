@@ -83,6 +83,25 @@ public interface ContractMapper extends BaseMapperX<ContractDO> {
     int updatePaidAmount(@Param("id") Long id, @Param("delta") BigDecimal delta);
 
     /**
+     * 清空在途的进度款申请（amount + period 同时置 NULL）
+     *
+     * 为什么单独写一条注解 SQL 而不走 {@code updateById}：
+     * MyBatis Plus 的 {@code updateById} 默认忽略值为 null 的字段（FieldStrategy.NOT_NULL），
+     * 想置空就得加 {@code @TableField(updateStrategy = FieldStrategy.IGNORED)} 之类的注解，
+     * 那会影响该 DO 上所有更新路径（包括表单 update，可能把别的列意外清空）。
+     * 这里用一条只动这两列的显式 SQL，作用域最小、语义最直白。
+     *
+     * 调用时机（见 {@code ContractApprovalServiceImpl}）：审批通过（流水已生成）与审批驳回/取消
+     * （申请作废）之后各一次，保证「在途金额」不会残留到下一期申请。
+     *
+     * @param id 合同编号
+     * @return 更新行数（0 表示合同不存在或已删除）
+     */
+    @Update("UPDATE bc_contract SET pending_payment_amount = NULL, pending_period = NULL, "
+            + "update_time = NOW() WHERE id = #{id} AND deleted = 0")
+    int clearPendingPayment(@Param("id") Long id);
+
+    /**
      * 合同台账对账（spec §5.1「台账对账：计划 vs 实际差异」）
      *
      * 一条 SQL 聚合四个口径，避免 4 次查库 + 应用层拼装：

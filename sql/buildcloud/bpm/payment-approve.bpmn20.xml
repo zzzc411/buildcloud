@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  筑云 BuildCloud —— 进度款审批流程（payment-approve）BPMN 2.0 流程定义源文件
+
+  用途：由 scripts/bpm-deploy-payment-approve.ps1 读取并调 bpm-server 的
+        POST /admin-api/bpm/model/create（BPMN 设计器模型）→ POST /admin-api/bpm/model/deploy
+        部署为 Flowable 流程定义。本文件是**单一事实来源**，改流程只改这里再重跑脚本。
+
+  流程结构（spec v1.2 §5.1「进度款申请走审批，通过后生成 payment_record 并回写合同累计收付」）：
+    发起（start 事件）
+      → 财务审批（userTask id=financeApprove，候选审批人=用户组 9202 财务审批组）
+          ├─ 通过 → 结束（end 事件）：bpm-server 判定实例 STATUS=APPROVE → 回调业务方
+          │        → 生成 bc_contract_payment_record + 原子累加 bc_contract.paid_amount
+          │        → 合同状态 审批中(1) → 履行中(2)
+          └─ 驳回 → 结束（end 事件）：bpm-server 判定实例 STATUS=REJECT  → 回调业务方
+                   → 不生成流水、不累加 → 合同状态 审批中(1) → 草稿(0)，可修改后重新提交
+
+  与 project-approve（W3-P4）的差异仅三处，其余结构**逐字照抄**（同构便于对照排障）：
+    1. <process id> / name：payment-approve / 进度款审批；
+    2. 审批节点 id/name：financeApprove / 财务审批，candidateParam=9202（财务审批组，
+       见 sql/buildcloud/05-bpm-seed.sql）；
+    3. 流程变量换成合同与进度款口径（contractId / contractNo / paymentAmount / period）。
+
+  关键约定（均来自基座源码 + W3-P4 实证踩坑，勿凭记忆修改）：
+  1. 流程 key/name 必须与流程模型（ACT_RE_MODEL）的 key/name 完全一致，否则
+     BpmProcessDefinitionServiceImpl#createProcessDefinition 抛 PROCESS_DEFINITION_KEY/NOT_MATCH；
+  2. 审批人配置用扩展元素 flowable:candidateStrategy / flowable:candidateParam
+     （BpmnModelUtils#parseCandidateStrategy 先读属性、读不到再读扩展元素——两者都支持，
+      这里按 SIMPLE 设计器产物用扩展元素，兼容两种读取路径）；
+     candidateStrategy=40 即 BpmTaskCandidateStrategyEnum.USER_GROUP；
+  3. 驳回策略不配 rejectHandlerType ⇒ 走默认「终止型驳回」
+     （BpmTaskServiceImpl#rejectTask 3.2：实例变量 STATUS=REJECT + moveTaskToEnd 结束流程）；
+  4. **只有一个结束事件、审批节点直连结束（不要用排他网关）**——W3-P4 实测踩坑（lessons-learned L2-13）：
+     单出线的排他网关不允许带条件表达式，Flowable 校验器直接拒绝
+     `flowable-exclusive-gateway-condition-not-allowed-on-single-seq-flow`。
+     通过由 approveTask 的 taskService.complete 正常流出，驳回由 rejectTask 的
+     moveTaskToEnd 把任务搬到「第一个 EndEvent」，两条路径都不走网关；
+     只留一个 EndEvent 还能保证 moveTaskToEnd 取到的结束事件确定唯一。
+
+  流程变量（由 buildcloud-project 的 ContractApprovalServiceImpl 发起时传入）：
+    businessKey   = 合同 id（写在 ACT_HI_PROCINST.BUSINESS_KEY_，回调时原样带回）
+    contractId / contractNo / contractName / paymentAmount / period / initiator / deptId
+-->
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             targetNamespace="http://bpm.buildcloud.com/definition">
+    <process id="payment-approve" name="进度款审批" isExecutable="true">
+        <documentation>工程进度款审批：财务审批，通过后生成实际收付款流水并累加合同累计收付、合同转为履行中；驳回则退回草稿且不产生流水。</documentation>
+
+        <startEvent id="StartEvent" name="发起进度款申请"/>
+
+        <!-- 财务审批：候选人为「财务审批组」（用户组编号 9202） -->
+        <userTask id="financeApprove" name="财务审批" flowable:candidateStrategy="40" flowable:candidateParam="9202">
+            <extensionElements>
+                <flowable:candidateStrategy>40</flowable:candidateStrategy>
+                <flowable:candidateParam>9202</flowable:candidateParam>
+            </extensionElements>
+        </userTask>
+
+        <!-- 审批通过后直接结束（不用排他网关：单出线带条件会被 Flowable 校验拒绝，见文件头第 4 条） -->
+        <endEvent id="EndEventApprove" name="审批通过"/>
+
+        <sequenceFlow id="flowStart" sourceRef="StartEvent" targetRef="financeApprove"/>
+        <sequenceFlow id="flowApprove" sourceRef="financeApprove" targetRef="EndEventApprove"/>
+    </process>
+
+    <!-- 流程图元数据：管理端「流程模型」预览用（无 BPMNDI 会导致设计器打开空白画布） -->
+    <bpmndi:BPMNDiagram id="BPMNDiagram_payment-approve">
+        <bpmndi:BPMNPlane bpmnElement="payment-approve" id="BPMNPlane_payment-approve">
+            <bpmndi:BPMNShape bpmnElement="StartEvent" id="BPMNShape_StartEvent">
+                <omgdc:Bounds height="36.0" width="36.0" x="100.0" y="163.0"/>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="financeApprove" id="BPMNShape_financeApprove">
+                <omgdc:Bounds height="80.0" width="100.0" x="186.0" y="141.0"/>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="EndEventApprove" id="BPMNShape_EndEventApprove">
+                <omgdc:Bounds height="36.0" width="36.0" x="426.0" y="163.0"/>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNEdge bpmnElement="flowStart" id="BPMNEdge_flowStart">
+                <omgdi:waypoint x="136.0" y="181.0"/>
+                <omgdi:waypoint x="186.0" y="181.0"/>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="flowApprove" id="BPMNEdge_flowApprove">
+                <omgdi:waypoint x="286.0" y="181.0"/>
+                <omgdi:waypoint x="426.0" y="181.0"/>
+            </bpmndi:BPMNEdge>
+        </bpmndi:BPMNPlane>
+    </bpmndi:BPMNDiagram>
+</definitions>

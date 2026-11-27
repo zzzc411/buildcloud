@@ -16,6 +16,7 @@ import cn.iocoder.yudao.module.bpm.api.event.OaTravelApplyStatusListener;
 import cn.iocoder.yudao.module.bpm.api.event.OaTravelReimbursementStatusListener;
 import cn.iocoder.yudao.module.bpm.api.event.OaVehicleApplyStatusListener;
 import cn.iocoder.yudao.module.bpm.api.event.OaVehicleReturnStatusListener;
+import cn.iocoder.yudao.module.bpm.api.event.PaymentApproveStatusListener;
 import cn.iocoder.yudao.module.bpm.api.event.ProjectApproveStatusListener;
 import cn.iocoder.yudao.module.system.api.dept.DeptApi;
 import cn.iocoder.yudao.module.system.api.dept.PostApi;
@@ -139,6 +140,19 @@ public class RpcConfiguration {
     @ConditionalOnMissingBean(name = "projectApproveStatusListener")
     public ProjectApproveStatusListener projectApproveStatusListener() {
         return new ProjectApproveStatusListener();
+    }
+
+    /**
+     * 进度款审批（payment-approve）结果转发器 —— W3-P5 新增，与上一条同构。
+     *
+     * spec v1.2 §5.1「进度款申请走审批，通过后生成 payment_record 并回写合同累计收付」；
+     * 业务侧接收端为 buildcloud-project-server 的 ContractApprovalListener。
+     * 纯新增，不改动上面任何既有 bean（ADR-003「影响」第 2 条：W4/W5 各需再加一处）。
+     */
+    @Bean
+    @ConditionalOnMissingBean(name = "paymentApproveStatusListener")
+    public PaymentApproveStatusListener paymentApproveStatusListener() {
+        return new PaymentApproveStatusListener();
     }
 
 }

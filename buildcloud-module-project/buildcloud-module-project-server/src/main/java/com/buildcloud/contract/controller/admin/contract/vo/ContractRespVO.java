@@ -57,6 +57,18 @@ public class ContractRespVO {
     @Schema(description = "备注")
     private String remark;
 
+    @Schema(description = "进度款审批流程实例编号（未发起过审批时为空）", example = "payment-approve:1:8f1d2c3b-....")
+    private String processInstanceId;
+
+    @Schema(description = "进度款审批状态：-1-未开始 1-审批中 2-通过 3-不通过 4-已取消，见 ContractApprovalStatusEnum", example = "-1")
+    private Integer approvalStatus;
+
+    @Schema(description = "在途进度款申请金额（元，仅审批中时有值）", example = "3000000.00")
+    private BigDecimal pendingPaymentAmount;
+
+    @Schema(description = "在途进度款申请期次（仅审批中时有值）", example = "1")
+    private Integer pendingPeriod;
+
     @Schema(description = "创建时间")
     @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND)
     private LocalDateTime createTime;
