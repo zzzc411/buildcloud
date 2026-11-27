@@ -169,6 +169,58 @@ mybatis-plus.type-aliases-package: ${yudao.info.base-package}.project.dal.dataob
 **现象**：`-pl <server> package` 报 `Could not resolve com.buildcloud:<module>-api`。
 **修复**：`install -pl <api>,<server>`，或 `-am`（但 `-am` 会把整条依赖链重编，慢）。
 
+### L2-12 BPM 跨服务审批回调：基座**对每条业务流程都要一个转发器**（W3-P4 实证）
+
+**现象**：项目立项审批流程能正常发起（`ACT_HI_PROCINST` 有实例、`ACT_RU_TASK` 有「部门经理审批」待办），
+bpm 的 `/admin-api/bpm/task/approve` 也返回成功、流程正常结束，但业务表 `bc_project.approval_status`
+**停在 1（审批中）永不变化**，`buildcloud-project-server` 日志里连一条回调请求都没有。
+
+**原因**：审批结果的回流是 `Flowable 事件 → BpmProcessInstanceEventListener → Spring ApplicationEvent`，
+`ApplicationEvent` **只在发布它的 JVM 内传播**。跨服务必须由 bpm-server 那个 JVM 里再有一个监听器
+HTTP 转发过去。基座 `yudao-module-bpm-server/.../api/event/` 下有 16 个这样的转发器，但
+**是「每个流程 key 一个类」的硬编码结构**，没有通用配置化转发（无「按 key 查 URL 表」实现）。
+所以基座没为你的流程 key 写过转发器时，链路就是断的——**而且断得很安静**：全程无报错，
+只有业务状态不动。
+
+**判别法（3 秒定位）**：审批完看业务表状态没变 → 去 bpm-server 日志搜
+`sendHttpRequest` / `PROCESS_INSTANCE_HTTP_CALL_ERROR`：
+- 有 `sendHttpRequest` 且 URL 是你的业务服务 → 转发器在，问题在接收端；
+- **完全没有 `sendHttpRequest`** → 转发器不存在，就是本条（W3-P4 实测就是这种）。
+
+**修复**：照抄基座同类（如 `OaLeaveApplyStatusListener`）新增一个转发类
+（`getProcessDefinitionKey()` 返回你的流程 key + `BpmHttpRequestUtils.executeBpmHttpRequest(event, url, restTemplate)`），
+并在 `framework/rpc/config/RpcConfiguration` 用 `@Bean @ConditionalOnMissingBean` 追加注册。
+业务侧按双模式实现接收端（`extends BpmProcessInstanceStatusEventListener` 且同时 `@RestController`）。
+**改基座记 ADR**（本项目 = ADR-003）。W4/W5 的 `payment-approve`/`requisition-approve` 各自还要再加一处。
+
+### L2-13 BPMN 部署 500：单出线排他网关**不允许带条件表达式**（W3-P4 实证）
+
+**现象**：`POST /admin-api/bpm/model/deploy` 返回 `code=500 msg=系统异常`，日志根因：
+```
+org.flowable.common.engine.api.FlowableException: Errors while parsing:
+[Validation set: 'flowable-executable-process'
+ | Problem: 'flowable-exclusive-gateway-condition-not-allowed-on-single-seq-flow']
+: Exclusive gateway has only one outgoing sequence flow. This is not allowed to have a condition.
+```
+**原因**：BPMN 里写成了 `userTask → exclusiveGateway → 单条带 CDATA[${true}] 的 sequenceFlow → endEvent`。
+为了「避免多出线无条件分支报错」而给单出线加 `${true}` 条件，反而触发另一条校验规则。
+**修复**：**审批通过/驳回不需要网关**——通过由 `approveTask` 的 `taskService.complete` 正常流出，
+驳回由 `rejectTask` 的 `moveTaskToEnd` 直接把任务搬到 `EndEvent`（`BpmnModelUtils#getEndEvent` 取
+流程里第一个 EndEvent）。**去掉网关、userTask 直连单个 endEvent** 最简，也保证 `moveTaskToEnd`
+取到的结束事件唯一。只有真正需要「按变量走不同分支」时才用排他网关，且那时必须是**多出线**。
+
+### L2-14 部署脚本「复用已有模型」时必须刷新 bpmnXml（W3-P4 实证）
+
+**现象**：改了 `sql/buildcloud/bpm/project-approve.bpmn20.xml` 再跑部署脚本，deploy 报的**还是改之前的错**，
+像是文件没生效。
+**原因**：`POST /admin-api/bpm/model/create` 在 key 已存在时返回 `1009002000 MODEL_KEY_EXISTS`，
+脚本走「复用已有模型」分支拿 `modelId` 后直接 `deploy`——但**复用的模型里存的是当初创建时的旧 bpmnXml**，
+`deploy` 部署的是模型内容，不是磁盘文件。
+**修复**：复用分支必须显式把最新 XML 写回模型，再 deploy：
+`PUT /admin-api/bpm/model/update-bpmn`，body `{ id, bpmnXml }`（该接口标了 `@Deprecated` 但仍可用；
+若将来移除，改走 `PUT /admin-api/bpm/model/update` 带完整 metaInfo）。
+**影响面**：所有「BPMN 作为仓库内源文件、用脚本部署」的项目；`scripts/bpm-deploy-project-approve.ps1` 已修。
+
 ---
 
 ## 三、流程与协作类

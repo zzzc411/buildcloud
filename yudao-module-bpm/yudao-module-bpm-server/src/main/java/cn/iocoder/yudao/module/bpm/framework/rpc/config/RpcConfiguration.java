@@ -16,6 +16,7 @@ import cn.iocoder.yudao.module.bpm.api.event.OaTravelApplyStatusListener;
 import cn.iocoder.yudao.module.bpm.api.event.OaTravelReimbursementStatusListener;
 import cn.iocoder.yudao.module.bpm.api.event.OaVehicleApplyStatusListener;
 import cn.iocoder.yudao.module.bpm.api.event.OaVehicleReturnStatusListener;
+import cn.iocoder.yudao.module.bpm.api.event.ProjectApproveStatusListener;
 import cn.iocoder.yudao.module.system.api.dept.DeptApi;
 import cn.iocoder.yudao.module.system.api.dept.PostApi;
 import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
@@ -129,6 +130,15 @@ public class RpcConfiguration {
     @ConditionalOnMissingBean(name = "oaVehicleReturnStatusListener")
     public OaVehicleReturnStatusListener oaVehicleReturnStatusListener() {
         return new OaVehicleReturnStatusListener();
+    }
+
+    // ========== 筑云 buildcloud 自研业务（非基座原生，见 ADR-003） ==========
+    // 与上面 OA/CRM 的注册方式完全相同：每个独立业务服务都需要一个转发器，
+    // 单体部署时业务模块自己声明同名 Bean，本 Bean 因 @ConditionalOnMissingBean 不生效。
+    @Bean
+    @ConditionalOnMissingBean(name = "projectApproveStatusListener")
+    public ProjectApproveStatusListener projectApproveStatusListener() {
+        return new ProjectApproveStatusListener();
     }
 
 }

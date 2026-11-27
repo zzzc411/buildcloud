@@ -29,6 +29,10 @@ CREATE TABLE IF NOT EXISTS "bc_project"
     "manager_user_id"   bigint         DEFAULT NULL,
     "dept_id"           bigint         DEFAULT NULL,
     "remark"            varchar(500)   DEFAULT NULL,
+    -- 立项审批两列（对应 sql/buildcloud/04-project-approval.sql）：W3-P4 新增，
+    -- approval_status 的 DEFAULT -1 必须与真实库一致，否则「未开始」在单测里会变 NULL 而掩盖判空缺陷
+    "process_instance_id" varchar(64)  DEFAULT NULL,
+    "approval_status"     tinyint      NOT NULL DEFAULT -1,
 
     "tenant_id"         bigint         NOT NULL DEFAULT 0,
     "creator"           varchar(64)    DEFAULT '',

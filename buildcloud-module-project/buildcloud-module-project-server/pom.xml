@@ -28,6 +28,27 @@
             <artifactId>buildcloud-module-project-api</artifactId>
             <version>${revision}</version>
         </dependency>
+        <!--
+          基座 bpm-api：立项审批（W3-P4）
+
+          仅引 api 模块（接口 + DTO + 枚举 + 事件基类），**不引 bpm-server**——
+          后者会把整个 Flowable 引擎与 BPM 业务表拉进 project 进程，既违背「独立业务服务」形态
+          （读码笔记 §1 形态 B），也会让两个服务争抢同一批 ACT_* 表。
+
+          用途三处（全部是基座既定扩展点，不臆造 API）：
+          1. BpmProcessInstanceApi：Feign 发起流程实例（读码笔记 §2.1）；
+          2. BpmProcessInstanceCreateReqDTO：发起入参（processDefinitionKey/variables/businessKey）；
+          3. BpmProcessInstanceStatusEventListener + BpmProcessInstanceStatusEvent：
+             审批结果回调的双模式监听器基类（读码笔记 §3.5）。
+
+          坐标取自基座既有模块（cn.iocoder.cloud:yudao-module-bpm-api），版本随 ${revision}，
+          未引入任何新的外部依赖（AGENTS §6.4）。
+        -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>yudao-module-bpm-api</artifactId>
+            <version>${revision}</version>
+        </dependency>
 
         <!-- 业务组件 -->
         <dependency>

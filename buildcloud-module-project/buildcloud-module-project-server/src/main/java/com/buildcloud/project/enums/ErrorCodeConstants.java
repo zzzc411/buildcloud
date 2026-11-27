@@ -42,4 +42,33 @@ public interface ErrorCodeConstants {
     ErrorCode PROJECT_MEMBER_PROJECT_NOT_EXISTS = new ErrorCode(1_100_020_002, "成员所属的项目不存在");
     ErrorCode PROJECT_MEMBER_ROLE_INVALID = new ErrorCode(1_100_020_003, "项目内角色取值不正确");
 
+    // ========== 立项审批 1-100-030-000（W3-P4，spec §5.3） ==========
+    /**
+     * 项目状态不是「筹备」，不满足发起立项审批的前提
+     *
+     * 提示语带上当前状态名，便于前端直接展示（错误码占位符 {@code {}} 与
+     * ProjectStatusEnum 的 name 对应）。
+     */
+    ErrorCode PROJECT_APPROVAL_STATUS_NOT_PREPARE = new ErrorCode(1_100_030_000, "项目当前状态为【{}】，只有筹备中的项目才能发起立项审批");
+    /**
+     * 项目已存在审批中的流程实例，拒绝重复发起
+     *
+     * 与「幂等回调」不是一回事：这里防的是**并发发起**（同一项目点两次提交 / 两个标签页），
+     * 回调侧防的是**重复通知**。
+     */
+    ErrorCode PROJECT_APPROVAL_ALREADY_RUNNING = new ErrorCode(1_100_030_001, "项目已有审批中的立项流程（流程实例 {}），请勿重复提交");
+    /**
+     * 发起流程后回写 process_instance_id 失败
+     *
+     * 属数据一致性兜底：bpm 侧已真实建好实例但本地回写异常时，抛出它让事务回滚，
+     * 避免出现「bpm 有实例、业务表无关联」的孤儿流程。
+     */
+    ErrorCode PROJECT_APPROVAL_START_FAILED = new ErrorCode(1_100_030_002, "发起立项审批失败，流程实例编号为空");
+    /**
+     * 回调携带的流程实例编号与业务表记录不一致
+     *
+     * 典型场景：项目已重新发起新流程，旧流程的迟到回调到达——必须丢弃而不是按旧结果覆盖。
+     */
+    ErrorCode PROJECT_APPROVAL_PROCESS_INSTANCE_MISMATCH = new ErrorCode(1_100_030_003, "审批回调与当前流程实例不匹配（回调 {}，当前 {}），已忽略");
+
 }

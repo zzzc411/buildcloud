@@ -142,4 +142,33 @@ public class ProjectDO extends TenantBaseDO {
      */
     private String remark;
 
+    /**
+     * 立项审批的流程实例编号
+     *
+     * 双向关联之一（读码笔记《reading-notes-bpm-integration.md》§2.3）：
+     * 业务表 → 流程用本字段，流程 → 业务表用流程实例的 businessKey（=项目编号 id）。
+     * 取值为 ACT_HI_PROCINST.PROC_INST_ID_，形如 `project-approve:1:<uuid>`（约 45 字符）。
+     *
+     * 生命周期：发起审批成功即回写；驳回/取消后**保留不清空**（审批历史可追溯）；
+     * 重新发起时覆盖为最新实例。
+     *
+     * 列定义见 sql/buildcloud/04-project-approval.sql。
+     */
+    private String processInstanceId;
+
+    /**
+     * 立项审批状态
+     *
+     * 数值域**直接复用基座** {@link cn.iocoder.yudao.module.bpm.enums.task.BpmProcessInstanceStatusEnum}，
+     * 不另立一套状态码（读码笔记 §2.2）：
+     * -1 未开始 / 1 审批中 / 2 通过 / 3 不通过 / 4 已取消
+     *
+     * 与 {@link #status}（项目业务状态：筹备/在建/停工/竣工）是**两个正交维度**：
+     * 审批通过是「筹备 → 在建」的触发条件，但项目状态只能经 ProjectStatusService 状态机变更，
+     * 审批状态从不直接写 status。
+     *
+     * 列定义见 sql/buildcloud/04-project-approval.sql（DEFAULT -1）。
+     */
+    private Integer approvalStatus;
+
 }

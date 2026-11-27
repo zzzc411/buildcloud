@@ -85,6 +85,12 @@ public class ProjectRespVO {
     @Schema(description = "备注")
     private String remark;
 
+    @Schema(description = "立项审批的流程实例编号（未发起过审批时为空）", example = "project-approve:1:8f1d2c3b-....")
+    private String processInstanceId;
+
+    @Schema(description = "立项审批状态：-1-未开始 1-审批中 2-通过 3-不通过 4-已取消，见 ProjectApprovalStatusEnum", example = "1")
+    private Integer approvalStatus;
+
     @Schema(description = "创建时间", requiredMode = Schema.RequiredMode.REQUIRED)
     @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND)
     private LocalDateTime createTime;
