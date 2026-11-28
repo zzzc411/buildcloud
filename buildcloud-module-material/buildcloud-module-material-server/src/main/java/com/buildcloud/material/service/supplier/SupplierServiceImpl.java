@@ -14,7 +14,6 @@ import org.springframework.validation.annotation.Validated;
 import java.util.Objects;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
-import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.invalidParamException;
 import static com.buildcloud.material.enums.ErrorCodeConstants.SUPPLIER_NOT_EXISTS;
 import static com.buildcloud.material.enums.ErrorCodeConstants.SUPPLIER_NO_DUPLICATE;
 
@@ -83,11 +82,12 @@ public class SupplierServiceImpl implements SupplierService {
     }
 
     /**
-     * 校验供应商编码租户内唯一
+     * 校验供应商编码在**未删除行**中唯一（ADR-004 A 类口径）
      *
-     * 两层校验（与目录/物料同源，详见 MaterialCategoryServiceImpl#validateCodeUnique）：
-     * 1. 未删除行重名 → SUPPLIER_NO_DUPLICATE；
-     * 2. 已逻辑删除行仍占用编码 → 可读参数异常（否则撞真库唯一索引返回 500）。
+     * 唯一性只约束活跃行（供方退场后同编码再入库是常态）；
+     * 数据库侧的 uk_supplier_no 已由 `09-unique-index-realign.sql` 降级为普通索引
+     * （`idx_supplier_no`），不再承担唯一性，故这里**不做**「探测已删行」的拦截。
+     * 详见 {@code MaterialCategoryServiceImpl#validateCodeUnique} 的历史提醒（L3-7）。
      *
      * @param id         供应商编号（更新时排除自身；新增传 null）
      * @param supplierNo 供应商编码
@@ -96,11 +96,6 @@ public class SupplierServiceImpl implements SupplierService {
         SupplierDO existing = supplierMapper.selectBySupplierNo(supplierNo);
         if (existing != null && !Objects.equals(existing.getId(), id)) {
             throw exception(SUPPLIER_NO_DUPLICATE);
-        }
-        Long deletedCount = supplierMapper.selectDeletedCountBySupplierNo(supplierNo);
-        if (deletedCount != null && deletedCount > 0) {
-            throw invalidParamException(
-                    "供应商编码【{}】曾被已删除的供应商使用，仍占用唯一索引，请更换编码或联系管理员清理历史数据", supplierNo);
         }
     }
 

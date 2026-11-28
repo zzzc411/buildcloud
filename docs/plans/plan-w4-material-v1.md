@@ -4,7 +4,7 @@
 | --- | --- |
 | 计划编号 | plan-w4-material-v1 |
 | 对应 spec 章节 | §5.2（材料域设计）、§6.1（V1 定义）、§9 W4 |
-| 状态 | 进行中（P1/P2/P3/P4/P5 ✅ / P6 待做） |
+| 状态 | 已完成（P1/P2/P3/P4/P5/P6 ✅） |
 | 计划开始 | 2026-12-21（周一） |
 | 计划完成 | 2026-12-27（周末，打 tag `w4`） |
 | 前置依赖 | plan-w3-project-contract（✅ 项目数据与 BPM 集成模式可复用） |
@@ -71,30 +71,30 @@
 | 上下文包（必读） | spec §5.2/§5.3；W3 Phase 4 的 BPM 集成模式（复用）；会签参考基座 BPM 示例（只读） |
 | 状态 | ✅（2026-11-28） |
 
-### Phase 6：单测补强 + 演示脚本
+### Phase 6：单测补强 + 演示脚本 + 唯一索引口径归一
 
 | 项 | 内容 |
 | --- | --- |
 | 工作量 | 1d |
-| 任务 | 库存扣减边界（0/负数/并发竞争）、状态机全路径、退料回退数学正确性单测；W4 演示脚本（手演路径清单） |
-| 交付物 | 单测套件 + `docs/testing/demo-script-w4.md` |
-| 验收标准 | [ ] 申领→审批→出库手动演示通过（演示脚本走查）；[ ] V1 可被压测（接口稳定、参数就绪）；[ ] 单测全绿 |
-| 上下文包（必读） | spec §8.1；Phase 3/4/5 产出 |
-| 状态 | ☐ |
+| 任务 | ① 按 ADR-004 落地 `09-unique-index-realign.sql`（A 类 6 个唯一索引降级为普通索引、B 类 3 个保留）并同步 01/03/07 注释口径；② 库存扣减边界、退料多次、审批中间态、跨项目隔离等盲点单测；③ W4 演示走查脚本 `docs/testing/demo-script-w4.md`；④ A/B 类行为真库验证；⑤ 全量回归 |
+| 交付物 | `09-unique-index-realign.sql` + 单测补强 + `docs/testing/demo-script-w4.md` |
+| 验收标准 | [x] A 类「删后重建同编码」真库生效（隔离库前后对比：before 被 1062 拒 / after 成功）；[x] B 类仍拦住重复（stock/member/payment_plan 三表实测 1062）；[x] 09 脚本幂等（连跑 3 次 exit=0，A 类 6 普通 + B 类 3 唯一恒稳）；[x] 单测 +9（其中新增类 8 个），模块 158 全绿、project 173 未受影响；[x] 申领→会签→出库→退料走查在真库跑通并对账（`SUM(quantity)==available_qty`）；[x] 演示脚本可执行、标注非性能报告（R-6） |
+| 上下文包（必读） | ADR-004；spec §8.1；Phase 3/4/5 产出；lessons-learned L3-7 |
+| 状态 | ✅（2026-11-28） |
 
 ## 3. 计划级验收标准（出口条件，来自 spec §9 W4）
 
-- [ ] 申领→审批→出库手动演示通过；
-- [ ] V1 可被压测（对照组就绪）；
-- [ ] 材料域 V1 完整闭环交付（含单测）；
-- [ ] tag `w4` + 状态同步 + 进度日志收尾。
+- [x] 申领→审批→出库手动演示通过（`docs/testing/demo-script-w4.md` 10 步真库走查，会签 2 人全过）；
+- [x] V1 可被压测（对照组就绪）：`create/submit` 接口面一字未动，参数与 W5 基线一致；**吞吐/延迟见 W5 压测报告**；
+- [x] 材料域 V1 完整闭环交付（含单测 158 全绿 + ADR-004 索引口径归一）；
+- [ ] tag `w4` + 状态同步 + 进度日志收尾（待 lead 统一打 tag）。
 
 ## 4. 涉及范围（改动声明）
 
 - 代码模块：`buildcloud-module-material`（本计划唯一 Java 模块）；
-- 数据库/SQL：`sql/buildcloud/material.sql` + 菜单；
+- 数据库/SQL：`sql/buildcloud/07-material.sql` + `09-unique-index-realign.sql` + 菜单；
 - 配置/Nacos：`requisition-approve` 流程定义；
-- 文档：ER 图更新、演示脚本、单测报告说明。
+- 文档：ER 图更新、演示脚本 `docs/testing/demo-script-w4.md`、单测报告说明。
 
 ## 5. 风险与回退
 
@@ -111,3 +111,4 @@
 - 2026-11-28：**P4 完成**（worker w4p4-requisition）— **申领 V1 同步链路（W5 压测对照组）**：16 个新文件（状态机枚举 3 个 + DO 2 + Mapper 2 + Service + 策略模式 4 个 + Controller + VO 3），单测 32 个（模块 109 全绿）。**V1 故意用 `SELECT ... FOR UPDATE` 行锁同步扣减、不做 CAS 重试**——因为 spec §6.1 明确 V1 是对照组，若偷偷优化成乐观锁则 V1/V2 差异被抹平、W5 压测失效；正确性由行锁保证，`WHERE available_qty >= qty` 留作第二道保险，`version` 仅可观测。**V1/V2 用策略模式**（`RequisitionSubmitHandler` 接口 + V1/V2 两实现 + Factory 按 `buildcloud.material.requisition-mode` 分发），V2 抛 1102070000 零副作用。**并发单测**：库存 50、10 线程各申领 10 → 成功 5/失败 5、stock=0 无超卖、流水 5 条 SUM=-50；另证明**行锁拦不住「同一单扣两次」**（须靠单据状态 CAS）。**V1 基线实测**（非正式压测，仅供 W5 对照）：同热点库存行下 1/5/20 路并发吞吐 12.6/19.0/13.6 rps——**吞吐不随并发扩展甚至回落**，正是行锁串行化的实证。联调全通过（入库→建单→submit→stock 减→流水负数→不足回滚→cancel 回补+冲正 biz_type=4）。**本 Phase 沉淀 5 条新经验**（L1-1f repackage.skip 静默损坏运行中 jar、L1-1g 注解 SQL null 时间参数需 jdbcType、L3-10 只查库断言漏响应体缺陷、L3-11 时间精度需容差）。下一步：P5 申领审批流（含 bpm 转发器）+ 出库/退料。
 - 2026-11-28：**P4 完成**（worker w4p4-requisition）— 申领 V1 同步链路（16 main + 2 test = 18 文件）：`RequisitionStatusEnum` 状态机（0草稿/1已提交/2已扣减/3已出库/4已完成/5部分回退/8已关闭/9已取消，`canTransfer` 单点实现 21 条边 + `canCancel` 窄口径）；`submitRequisition` 同一事务内 ①状态0→1 CAS ②逐条 `SELECT ... FOR UPDATE` 锁库存行 ③校验 available>=qty ④`available_qty -= qty`（**行锁下直接更新，无 CAS 无重试**——spec §6.1 明确 V1 是对照组，改写会毁掉 W5 基线）⑤`biz_type=2` 流水 quantity 负 ⑥状态1→2 CAS；取消 = **状态 CAS + 行锁回补 + biz_type=4 冲正流水**（净额归零）。**V1/V2 开关**：`buildcloud.material.requisition-mode` + 接口两实现 + 工厂，V2 抛 1-102-070-000 **不静默回退**（否则 W5 对照失效）；实测启动参数 `--buildcloud.material.requisition-mode=V2` 生效、submit 返 1102070000 且零副作用。**单测 32 个全绿**（模块 109）；并发用例实测 **10 线程各申领 10 / 库存 50 → 成功 5、失败 5、stock=0、无超卖**，另一用例「同一单 5 并发提交」→ 仅 1 成功（靠状态 CAS 而非行锁拦下）。**网关联调全通过**：入库 100 → 建单 30 → submit → stock 250.5→220.5、流水 quantity=-30 balanceAfter=220.5 biz_no=req_no → 库存不足 99999 返 `1102040001` 且**库存/流水/状态全无变化**（草稿仍 0）→ cancel → 回补 250.5 + biz_type=4 (+30)。真库终态核对：`SUM(stock_log.quantity)=2155.5 == available_qty=2155.5`。**V1 行锁实测基线（W5 对照用）**：直连 48085 同一热点库存行，20 请求 → 并发 1 路 12.6 rps / 5 路 19.0 rps / 20 路 13.6 rps（**吞吐不随并发扩展，锁排队饱和**），avg 79/53/74 ms。修掉 2 个真 bug（列表页见 L4-x）：cancel 响应体 approvalStatus 不同步、timeoutTime 两处 now() 不一致。下一步：P5 申领审批流 + 出库/退料闭环。
 - 2026-11-28：**P5 完成**（worker w4p5-approval 脚手架 + w4p5b-service 续做 Service 层）— **申领审批（会签）+ 出库/退料闭环**。① **08 SQL 先跑通**（`docker cp` + 容器内重定向 + `--default-character-set=utf8mb4`，L1-1b/L2-10），连跑 2 次 exit=0 幂等，四列（`approvers`/`actual_out_time`/`actual_return_time`/`returned_qty`）+ `idx_process_instance_id` 就位。② **审批与 V1 扣减的衔接（本 Phase 最贵的口径）**：V1 的 `submit` 是「提交即扣减」；审批链路是**另一条路径**——`approval/submit` 复用 `RequisitionV1SubmitHandler` 的行锁扣减（**同一段代码，不重写**）后推进到已提交(1)，**审批通过只 1→2、绝不碰库存**（重复扣=同一单扣两遍，驳回只补一遍，账永远不平），**驳回才回补 + biz_type=4 冲正**。③ 新增 6 个文件（Service 接口/实现、Listener、Controller、3 个 VO、`framework/rpc/config/RpcConfiguration`），Mapper 加 6 条 CAS SQL（`startApprovalCas`/`updateProcessInstanceIdIfAbsent`/`finishApprovalCas`/`outboundCas`/`returnCas`/`increaseReturnedQtyReturnCheck`）。**幂等主闸门是数据库 CAS 而非内存判断**——`WHERE approval_status=1` 让两个并发回调只有一个能命中，回补只发生一次。④ **会签**：`approvers` 走流程变量 + BPMN `candidateStrategy=60`，实例在 `ACT_RU_TASK` 上**真建 2 个任务、assignee 分别是 1 和 100**；admin 批第一个后剩 1 个任务、业务状态仍 1；yudao(100) 再批 → 任务归零、回调 `status=2`、状态 1→2、**库存 150 未变**。⑤ **单测 40 个全绿**（模块 149），含「通过后库存与流水条数完全不变」「重复驳回不重复回补」「迟到回调不改终态」「退料超量整体回滚」「返回值==库值（L3-10）」等。⑥ **端到端两条路径实测**：通过路径 入库200→申领50→会签→出库(库存仍150)→退20(→5,库存170,流水`3|20|170`)→退40 **报错可退30**→退30(→4,库存200)，`SUM(quantity)=200=available_qty`；驳回路径 会签 1 批 1 驳 → 状态 9/审批 3、库存 140→**200 回补**、流水`4|60|200`、净额 0；**重放 APPROVE/REJECT 回调各一次均 HTTP 200 且零副作用**（库存仍 200、流水仍 3 条、状态仍 9/3）。⑦ **修掉 2 个真缺陷**：bpm-server `RpcConfiguration` 缺 `RequisitionApproveStatusListener` 的 import（脚手架漏了，编译即失败）；material 缺 `@EnableFeignClients(clients={BpmProcessInstanceApi.class})`（加依赖不够，启动报「required a bean」）。⑧ **新增 3 条经验 L2-15/L2-16/L2-17**（Feign 需显式 EnableFeignClients、会签中途状态要查 `ACT_RU_TASK`、`Set-Content -Encoding utf8` 加 BOM + 编码漂移炸 Java 源码）。未提交（worker 不执行 git 写操作，L3-1）。
+- 2026-11-28：**P6 完成（W4 收官）**（worker w4p6-finalize）—— **唯一索引口径归一 + 单测补强 + 演示脚本 + 全量回归**。① **`sql/buildcloud/09-unique-index-realign.sql`**（ADR-004 落地，幂等）：A 类 6 个唯一索引 → 普通索引（`bc_project.uk_project_no`/`bc_contract.uk_contract_no` 沿用原名，`bc_material.idx_material_no`/`bc_supplier.idx_supplier_no`/`bc_requisition.idx_req_no`/`bc_material_category.idx_material_category_code` 加 idx_ 前缀），B 类 3 个（stock/member/payment_plan）**不动**并注释声明；用 `SET @sql := IF(...)` + `PREPARE` 双段判断（唯一索引存在 → DROP；普通索引不存在 → ADD），连跑 **3 次 exit=0** 幂等。② **真库实测 A/B 类**：A 类 `bc_material_category` 逻辑删除后同 code 重建 **成功**（库中 1 活跃 + 1 已删）；B 类三表重复插入均 `ERROR 1062`（`uk_project_material`/`uk_project_user`/`uk_contract_period`）。**前后对比实证**（在一次性库 `bc_p6_probe` 上复刻 DDL，避免回退主库索引）：唯一索引口径下同编码重建 → `ERROR 1062 Duplicate entry`（即用户看到的 500 根因）；09 口径下 → **成功**。③ **撤掉 P2 的「探测已删行即报错」兜底**（目录/物料/供应商三处）：ADR-004 落地后该兜底等于把 A 类又变回 B 类，会让「删后重建」继续不可用——**这是本次改代码的唯一原因**，`selectDeletedCount*` 保留转作审计/回归查询。④ **单测 +9**（新增 `RequisitionP6BlindSpotTest` 8 个 + 目录 A 类 active/rebuild 对偶 1 个；3 个 P2 旧断言按新口径改写）：退料多次（20 再 30，`returned_qty` 累加、状态 5→4）、多行分轮退料、会签中间态（状态与库存均不变）、中间态后驳回、**跨项目库存隔离**（同物料两项目互不影响、退料只回本单项目）、**B 类唯一索引在 H2 仍抛 DuplicateKeyException**、多轮退料逐笔 `balance_after` 守恒；全部含「返回值 == 库值」（L3-10）与时间容差（L3-11）。⑤ **全量回归**：material **158 全绿**、project **173 全绿**（未受影响的独立复核）；`install -pl material-api,material-server`（**不带 repackage.skip**，L1-1f）后 fat jar **143.4MB**，停服→重打包→重启→`/admin-api/buildcloud-material/health` 返回 `code=0`。⑥ **`docs/testing/demo-script-w4.md`**：10 步真库走查（登录→建目录/物料→入库 100+50.5→建单 50→提交会签→`ACT_RU_TASK` 2 任务→admin 批 1/2（状态库存不动）→yudao 批 2/2（状态 1→2、库存不动）→出库 2→3→退 20（5）→退 30（4）→流水 5 条与对账 SQL），每步给 `curl.exe --data-binary @file`（避 L1-1d）与期望 code/字段值；对账 SQL 实测 `available_qty=150.5000 == SUM(quantity)=150.5000`、`diff=0`、`CONSISTENT`；文首标注**非性能报告**（R-6）。⑦ 密钥扫描 2552 文件 0 命中。未提交（worker 不执行 git 写操作，L3-1）。— **申领审批（会签）+ 出库/退料闭环**。① **08 SQL 先跑通**（`docker cp` + 容器内重定向 + `--default-character-set=utf8mb4`，L1-1b/L2-10），连跑 2 次 exit=0 幂等，四列（`approvers`/`actual_out_time`/`actual_return_time`/`returned_qty`）+ `idx_process_instance_id` 就位。② **审批与 V1 扣减的衔接（本 Phase 最贵的口径）**：V1 的 `submit` 是「提交即扣减」；审批链路是**另一条路径**——`approval/submit` 复用 `RequisitionV1SubmitHandler` 的行锁扣减（**同一段代码，不重写**）后推进到已提交(1)，**审批通过只 1→2、绝不碰库存**（重复扣=同一单扣两遍，驳回只补一遍，账永远不平），**驳回才回补 + biz_type=4 冲正**。③ 新增 6 个文件（Service 接口/实现、Listener、Controller、3 个 VO、`framework/rpc/config/RpcConfiguration`），Mapper 加 6 条 CAS SQL（`startApprovalCas`/`updateProcessInstanceIdIfAbsent`/`finishApprovalCas`/`outboundCas`/`returnCas`/`increaseReturnedQtyReturnCheck`）。**幂等主闸门是数据库 CAS 而非内存判断**——`WHERE approval_status=1` 让两个并发回调只有一个能命中，回补只发生一次。④ **会签**：`approvers` 走流程变量 + BPMN `candidateStrategy=60`，实例在 `ACT_RU_TASK` 上**真建 2 个任务、assignee 分别是 1 和 100**；admin 批第一个后剩 1 个任务、业务状态仍 1；yudao(100) 再批 → 任务归零、回调 `status=2`、状态 1→2、**库存 150 未变**。⑤ **单测 40 个全绿**（模块 149），含「通过后库存与流水条数完全不变」「重复驳回不重复回补」「迟到回调不改终态」「退料超量整体回滚」「返回值==库值（L3-10）」等。⑥ **端到端两条路径实测**：通过路径 入库200→申领50→会签→出库(库存仍150)→退20(→5,库存170,流水`3|20|170`)→退40 **报错可退30**→退30(→4,库存200)，`SUM(quantity)=200=available_qty`；驳回路径 会签 1 批 1 驳 → 状态 9/审批 3、库存 140→**200 回补**、流水`4|60|200`、净额 0；**重放 APPROVE/REJECT 回调各一次均 HTTP 200 且零副作用**（库存仍 200、流水仍 3 条、状态仍 9/3）。⑦ **修掉 2 个真缺陷**：bpm-server `RpcConfiguration` 缺 `RequisitionApproveStatusListener` 的 import（脚手架漏了，编译即失败）；material 缺 `@EnableFeignClients(clients={BpmProcessInstanceApi.class})`（加依赖不够，启动报「required a bean」）。⑧ **新增 3 条经验 L2-15/L2-16/L2-17**（Feign 需显式 EnableFeignClients、会签中途状态要查 `ACT_RU_TASK`、`Set-Content -Encoding utf8` 加 BOM + 编码漂移炸 Java 源码）。未提交（worker 不执行 git 写操作，L3-1）。

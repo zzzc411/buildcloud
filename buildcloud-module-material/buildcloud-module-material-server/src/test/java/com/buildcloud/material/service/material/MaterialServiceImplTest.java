@@ -22,6 +22,7 @@ import static com.buildcloud.material.enums.ErrorCodeConstants.MATERIAL_CATEGORY
 import static com.buildcloud.material.enums.ErrorCodeConstants.MATERIAL_NOT_EXISTS;
 import static com.buildcloud.material.enums.ErrorCodeConstants.MATERIAL_NO_DUPLICATE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -129,24 +130,52 @@ public class MaterialServiceImplTest extends BaseDbUnitTest {
     }
 
     @Test
-    public void testCreateMaterial_materialNoOccupiedByDeletedRow() {
-        // mock 数据：建一条物料并逻辑删除（模拟真库：deleted=1 的行仍占用 uk_material_no）
-        MaterialDO deleted = insertMaterial("MT-DELETED-01", "已删物料", "S1", null);
-        materialMapper.deleteById(deleted.getId());
+    public void testCreateMaterial_rebuildAfterLogicalDelete_succeeds() {
+        // ===== ADR-004 A 类验收（W4-P6）：物料编码「删后可重建」必须**成功** =====
+        // 历史：W4-P2 时这条会返回 500（真库 uk_material_no 不感知 deleted，
+        //       已删行仍占编码）。ADR-004 把该索引降级为普通索引 idx_material_no，
+        //       唯一性只约束「未删除行」→ 同编码重建是合法业务动作。
+        // mock 数据：建一条物料并逻辑删除
+        MaterialDO deleted = insertMaterial("MT-REBUILD-01", "已删物料", "S1", null);
+        Long deletedId = deleted.getId();
+        materialMapper.deleteById(deletedId);
+        // 前置断言：逻辑删除行仍在库里（不是物理删除），且唯一性探测能看见它
+        assertEquals(1L, materialMapper.selectDeletedCountByMaterialNo("MT-REBUILD-01"),
+                "逻辑删除后行仍在库中，仍占用 material_no（这正是索引冲突的来源）");
+        assertNull(materialMapper.selectByMaterialNo("MT-REBUILD-01"),
+                "逻辑删除插件过滤后 Service 看不到已删行");
 
         // 准备参数：用同一编码重建
         MaterialSaveReqVO createReqVO = randomPojo(MaterialSaveReqVO.class, o -> {
             o.setId(null);
-            o.setMaterialNo("MT-DELETED-01");
+            o.setMaterialNo("MT-REBUILD-01");
             o.setName("重建物料");
             o.setUnit("吨");
             o.setCategoryId(null);
             o.setStatus(0);
         });
 
-        // 断言：给出可读提示，而不是撞唯一索引返回 500
-        ServiceExceptionAssert.assertInvalidParam(
-                () -> materialService.createMaterial(createReqVO), "MT-DELETED-01");
+        // 调用：**必须成功**（不再抛 invalidParamException）
+        Long newId = materialService.createMaterial(createReqVO);
+
+        // 断言 1：返回新 id，且不等同于已删行
+        assertNotNull(newId);
+        assertNotEquals(deletedId, newId);
+        // 断言 2（L3-10：返回值 == 库值）：Service 返回的 id 能查到，字段与请求一致
+        MaterialDO created = materialMapper.selectById(newId);
+        assertNotNull(created);
+        assertEquals("MT-REBUILD-01", created.getMaterialNo());
+        assertEquals("重建物料", created.getName());
+        assertEquals(newId, created.getId());
+        // 断言 3：库里同编码并存 —— 1 条活跃 + 1 条已删（A 类的核心效果）
+        //   注意：Mapper 的 selectCount 走逻辑删除插件，只能看到活跃行；
+        //   已删行必须用原生 SQL 的 selectDeletedCount* 才能看到。
+        assertEquals(1, materialMapper.selectCount(MaterialDO::getMaterialNo, "MT-REBUILD-01"),
+                "活跃行应只有新建的这一条");
+        assertEquals(1, materialMapper.selectDeletedCountByMaterialNo("MT-REBUILD-01"),
+                "已删行仍在，与新行并存（ADR-004 A 类的核心效果）");
+        // 断言 4：Service 的校验视图（selectByMaterialNo）返回的是**新**行，不是已删行
+        assertEquals(newId, materialMapper.selectByMaterialNo("MT-REBUILD-01").getId());
     }
 
     @Test

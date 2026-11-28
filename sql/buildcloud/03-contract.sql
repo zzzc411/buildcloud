@@ -8,6 +8,11 @@
 -- 执行：mysql -u<user> -p"<PWD>" --default-character-set=utf8mb4 ruoyi-vue-pro < 03-contract.sql
 --       ⚠️ 必须带 --default-character-set=utf8mb4（lessons-learned L2-10：中文双重编码不可逆）
 -- 约定：金额 decimal(18,2)（元，含 2 位小数，满足工程结算精度）；日期用 date（不需要时分秒语义）。
+--
+-- 【唯一索引口径 —— ADR-004】本文件保留 `CREATE TABLE` 内的唯一索引作为新建库的初始防线；
+--   生产口径由 `09-unique-index-realign.sql` 归一。本域涉及：
+--     A 类 → bc_contract.uk_contract_no（逻辑删除后允许同编号重签）
+--     B 类 → bc_contract_payment_plan.uk_contract_period（含 period，同合同期次重复是真错误，保留）
 -- =====================================================================================
 
 -- ------------------------------------------------------------------------------------
@@ -42,6 +47,8 @@ CREATE TABLE IF NOT EXISTS `bc_contract`
     `deleted`        bit(1)         NOT NULL DEFAULT b'0' COMMENT '是否删除',
     PRIMARY KEY (`id`) USING BTREE,
     -- 合同编号租户内唯一（逻辑删除记录不参与唯一性判断由业务层保证，与 bc_project 口径一致）
+    -- **（A 类：逻辑删除后允许同编码重建，见 ADR-004；生产口径由 09-unique-index-realign.sql 归一）**
+    -- 归一后本键变为普通索引（同名 uk_contract_no），唯一性由 Service 层「查全量含已删行」承担。
     UNIQUE KEY `uk_contract_no` (`tenant_id`, `contract_no`) USING BTREE,
     -- 台账主路径：按项目查本合同清单（项目详情页/成本归集）
     KEY `idx_project_id` (`project_id`) USING BTREE,
@@ -78,6 +85,7 @@ CREATE TABLE IF NOT EXISTS `bc_contract_payment_plan`
     `deleted`       bit(1)         NOT NULL DEFAULT b'0' COMMENT '是否删除',
     PRIMARY KEY (`id`) USING BTREE,
     -- 同一合同内期次唯一
+    -- **（B 类：结构唯一 = 同合同重复编制同一期次是数据错误，按 ADR-004 保留；09 脚本不动它）**
     UNIQUE KEY `uk_contract_period` (`tenant_id`, `contract_id`, `period`) USING BTREE,
     -- 计划列表按合同查、按计划日期排序；逾期扫描 Job 走 (status, plan_date)
     KEY `idx_contract_plan_date` (`contract_id`, `plan_date`) USING BTREE,

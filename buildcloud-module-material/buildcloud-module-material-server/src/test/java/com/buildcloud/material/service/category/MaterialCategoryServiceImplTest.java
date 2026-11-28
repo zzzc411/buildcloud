@@ -23,6 +23,7 @@ import static com.buildcloud.material.enums.ErrorCodeConstants.MATERIAL_CATEGORY
 import static com.buildcloud.material.enums.ErrorCodeConstants.MATERIAL_CATEGORY_NAME_DUPLICATE;
 import static com.buildcloud.material.enums.ErrorCodeConstants.MATERIAL_CATEGORY_NOT_EXISTS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -179,12 +180,21 @@ public class MaterialCategoryServiceImplTest extends BaseDbUnitTest {
     }
 
     @Test
-    public void testCreateCategory_codeOccupiedByDeletedRow() {
-        // mock 数据：建一个目录并**逻辑删除**它（模拟真库：deleted=1 的行仍占用 uk_material_category_code）
+    public void testCreateCategory_rebuildAfterLogicalDelete_succeeds() {
+        // ===== ADR-004 A 类核心验收（W4-P6）：材料目录「删后可重建同编码」必须**成功** =====
+        // 这是 ADR-004 的直接触发场景（W4-P2 实测：删 STEEL 再建 STEEL → code=500）。
+        // mock 数据：建 STEEL 并逻辑删除
         MaterialCategoryDO deleted = insertCategory(MaterialCategoryDO.PARENT_ID_ROOT, "钢材", "STEEL", 1);
-        categoryMapper.deleteById(deleted.getId());
+        Long deletedId = deleted.getId();
+        categoryService.deleteCategory(deletedId);
 
-        // 准备参数：用同一个 code 重新建
+        // 前置断言：逻辑删除行仍在库里（不是物理删除）——这正是唯一索引冲突的来源
+        assertEquals(1L, categoryMapper.selectDeletedCountByCode("STEEL"),
+                "逻辑删除后行仍在库中，仍占用 code");
+        assertNull(categoryMapper.selectByCode("STEEL"),
+                "逻辑删除插件过滤后 Service 的 selectByCode 看不到已删行");
+
+        // 准备参数：用同一个 code 重新建（名称不同，仅编码相同）
         MaterialCategorySaveReqVO createReqVO = randomPojo(MaterialCategorySaveReqVO.class, o -> {
             o.setId(null);
             o.setParentId(MaterialCategoryDO.PARENT_ID_ROOT);
@@ -193,10 +203,46 @@ public class MaterialCategoryServiceImplTest extends BaseDbUnitTest {
             o.setStatus(0);
         });
 
-        // 断言：不撞真库唯一索引返回 500，而是给出**可操作**的可读提示
-        // （这是 W4-P2 联调实测出的真实缺陷：真库 uk 不感知 deleted，逻辑删除行仍占编码）
+        // 调用：必须成功（不再抛 400，更不会撞索引返 500）
+        Long newId = categoryService.createCategory(createReqVO);
+
+        // 断言 1：返回新 id，与已删行不同
+        assertNotNull(newId);
+        assertNotEquals(deletedId, newId);
+        // 断言 2（L3-10：返回值 == 库值）：Service 返回的 id 能查到，字段与请求一致
+        MaterialCategoryDO created = categoryService.getCategory(newId);
+        assertNotNull(created);
+        assertEquals("STEEL", created.getCode());
+        assertEquals("钢材（重建）", created.getName());
+        assertEquals(created.getId(), newId);
+        // 断言 3：库里同编码并存 —— 1 条活跃 + 1 条已删
+        //   注意：selectCount 走逻辑删除插件只能看到活跃行；已删行须用原生 SQL 的 selectDeletedCountByCode。
+        assertEquals(1, categoryMapper.selectCount(MaterialCategoryDO::getCode, "STEEL"),
+                "活跃行应只有新建的这一条");
+        assertEquals(1L, categoryMapper.selectDeletedCountByCode("STEEL"),
+                "已删行仍在，与新行并存（ADR-004 A 类的核心效果）");
+        // 断言 4：树里只能看到活跃的那条（已删行不该出现在前端）
+        List<MaterialCategoryRespVO> tree = categoryService.getCategoryTree();
+        assertEquals(1, tree.size());
+        assertEquals(newId, tree.get(0).getId());
+    }
+
+    @Test
+    public void testCreateCategory_duplicateActiveCode_stillRejected() {
+        // A 类降级后「业务唯一」全靠 Service 层：同编码且**都未删除**必须仍然被拒（可读 400，不是 500）
+        insertCategory(MaterialCategoryDO.PARENT_ID_ROOT, "钢材", "STEEL", 1);
+        MaterialCategorySaveReqVO createReqVO = randomPojo(MaterialCategorySaveReqVO.class, o -> {
+            o.setId(null);
+            o.setParentId(MaterialCategoryDO.PARENT_ID_ROOT);
+            o.setName("另一个钢材目录");
+            o.setCode("STEEL");
+            o.setStatus(0);
+        });
+
         ServiceExceptionAssert.assertInvalidParam(
                 () -> categoryService.createCategory(createReqVO), "STEEL");
+        // 断言：仍然只有 1 条 STEEL（拒绝生效，没有落半条脏数据）
+        assertEquals(1, categoryMapper.selectCount(MaterialCategoryDO::getCode, "STEEL"));
     }
 
     @Test

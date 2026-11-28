@@ -15,7 +15,6 @@ import org.springframework.validation.annotation.Validated;
 import java.util.Objects;
 
 import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.exception;
-import static cn.iocoder.yudao.framework.common.exception.util.ServiceExceptionUtil.invalidParamException;
 import static com.buildcloud.material.enums.ErrorCodeConstants.MATERIAL_CATEGORY_NOT_EXISTS;
 import static com.buildcloud.material.enums.ErrorCodeConstants.MATERIAL_NOT_EXISTS;
 import static com.buildcloud.material.enums.ErrorCodeConstants.MATERIAL_NO_DUPLICATE;
@@ -95,14 +94,12 @@ public class MaterialServiceImpl implements MaterialService {
     }
 
     /**
-     * 校验物料编码租户内唯一
+     * 校验物料编码在**未删除行**中唯一（ADR-004 A 类口径）
      *
-     * 两层校验（W4-P2 联调实测的真实缺陷，详见目录模块同源注释）：
-     * 1. 未删除行重名 → MATERIAL_NO_DUPLICATE；
-     * 2. 已逻辑删除行仍占用编码 → 可读参数异常。
-     *
-     * 真库 uk_material_no 是普通唯一索引，不感知 deleted；只做第 1 层时，
-     * 「删掉 MT-001 再新建 MT-001」会撞索引返回 500 系统异常。
+     * 唯一性只约束活跃行（物料停用/录错后可删除再用同编码重建，是现场常态）；
+     * 数据库侧的 uk_material_no 已由 `09-unique-index-realign.sql` 降级为普通索引
+     * （`idx_material_no`），不再承担唯一性，故这里**不做**「探测已删行」的拦截。
+     * 详见 {@code MaterialCategoryServiceImpl#validateCodeUnique} 的历史提醒（L3-7）。
      *
      * @param id         物料编号（更新时排除自身；新增传 null）
      * @param materialNo 物料编码
@@ -111,11 +108,6 @@ public class MaterialServiceImpl implements MaterialService {
         MaterialDO existing = materialMapper.selectByMaterialNo(materialNo);
         if (existing != null && !Objects.equals(existing.getId(), id)) {
             throw exception(MATERIAL_NO_DUPLICATE);
-        }
-        Long deletedCount = materialMapper.selectDeletedCountByMaterialNo(materialNo);
-        if (deletedCount != null && deletedCount > 0) {
-            throw invalidParamException(
-                    "物料编码【{}】曾被已删除的物料使用，仍占用唯一索引，请更换编码或联系管理员清理历史数据", materialNo);
         }
     }
 

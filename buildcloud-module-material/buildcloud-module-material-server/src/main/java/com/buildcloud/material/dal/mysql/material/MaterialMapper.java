@@ -40,11 +40,13 @@ public interface MaterialMapper extends BaseMapperX<MaterialDO> {
     }
 
     /**
-     * 统计某物料编码被**已逻辑删除**的行占用的数量（真库唯一索引冲突的前置探测）
+     * 统计某物料编码被**已逻辑删除**的行占用的数量（审计/回归查询用）
      *
-     * 与目录同源问题（见 MaterialCategoryMapper#selectDeletedCountByCode 的详细说明）：
-     * 真库 uk_material_no(tenant_id, material_no) 不感知 deleted，逻辑删除行仍占编码，
+     * 历史：真库 uk_material_no(tenant_id, material_no) 曾不感知 deleted，逻辑删除行仍占编码，
      * 「删掉 MT-001 再新建 MT-001」会绕过 Service 校验撞索引，前端只看到 500。
+     * 该索引已由 `09-unique-index-realign.sql` 降级为普通索引 idx_material_no（ADR-004 A 类），
+     * 删后重建同编码现在是**合法且可用**的，Service 层不再用本方法拦截。
+     * 详见 {@code MaterialCategoryMapper#selectDeletedCountByCode}。
      *
      * 原生 @Select → 逻辑删除插件不生效（要看见已删行），多租户插件仍自动追加 tenant_id。
      *
@@ -55,7 +57,7 @@ public interface MaterialMapper extends BaseMapperX<MaterialDO> {
     Long selectDeletedCountByMaterialNo(@Param("materialNo") String materialNo);
 
     /**
-     * 按物料编码查询（唯一键 uk_material_no 的业务侧校验入口）
+     * 按物料编码查询（ADR-004 A 类口径下，唯一性校验的唯一入口）
      *
      * @param materialNo 物料编码
      * @return 物料

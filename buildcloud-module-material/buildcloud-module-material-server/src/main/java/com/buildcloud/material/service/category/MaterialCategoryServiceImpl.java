@@ -227,19 +227,18 @@ public class MaterialCategoryServiceImpl implements MaterialCategoryService {
     }
 
     /**
-     * 校验目录编码租户内唯一
+     * 校验目录编码在**未删除行**中唯一（ADR-004 A 类口径）
      *
-     * 两层校验，缺一不可：
-     * 1. **未删除行重名** → 可读业务提示（正常的"编码已存在"）；
-     * 2. **已逻辑删除行仍占用该编码** → 也给出可读提示。
+     * ADR-004 把「编码/单号」归为 A 类：**逻辑删除后允许用同编码重建**（目录撤销再重建是常态），
+     * 唯一性只约束「未删除的活跃行」，由本方法承担；
+     * 数据库侧的唯一索引已由 `sql/buildcloud/09-unique-index-realign.sql` 降级为普通索引
+     * （`idx_material_category_code`），仅保留查询能力，**不再当唯一性防线**。
      *
-     * 第 2 层是 W4-P2 联调实测出来的真实缺陷：真库 uk_material_category_code 是普通唯一索引，
-     * 不感知 deleted 列，逻辑删除的行**仍然占用**编码。只做第 1 层时，
-     * 「删掉 STEEL 再新建 STEEL」会绕过 Service 校验直接撞索引，
-     * 前端拿到的是 `code=500 系统异常`——比给不出原因更糟，用户完全无法自助解决。
-     *
-     * 这里只**探测并给出可操作提示**，不绕过索引（要真正支持"删后同编码重建"，
-     * 须改真库唯一键 = AGENTS R-4 改数据库结构，属 P1 的 07-material.sql 决策范围）。
+     * 历史提醒（W4-P2 实证，lessons-learned L3-7）：降级之前，已删行仍占用唯一索引，
+     * 「删 STEEL 再建 STEEL」会绕过本方法直接撞索引 → `code=500 系统异常`。
+     * 当时这里多一层「探测已删行并报错」的兜底；ADR-004 落地后该兜底**必须撤掉**——
+     * 留着它等于把 A 类又变回 B 类，删后重建仍然不可用（见单测
+     * `testCreateCategory_rebuildAfterLogicalDelete_succeeds`）。
      *
      * @param excludeId 需要排除的目录编号（更新时排除自身；新增传 null）
      * @param code      目录编码
@@ -248,12 +247,6 @@ public class MaterialCategoryServiceImpl implements MaterialCategoryService {
         MaterialCategoryDO existing = materialCategoryMapper.selectByCode(code);
         if (existing != null && !Objects.equals(existing.getId(), excludeId)) {
             throw invalidParamException("材料目录编码【{}】已存在，请更换", code);
-        }
-        // 已被逻辑删除的行仍占用真库唯一索引：提前拦下，避免 500
-        Long deletedCount = materialCategoryMapper.selectDeletedCountByCode(code);
-        if (deletedCount != null && deletedCount > 0) {
-            throw invalidParamException(
-                    "材料目录编码【{}】曾被已删除的目录使用，仍占用唯一索引，请更换编码或联系管理员清理历史数据", code);
         }
     }
 

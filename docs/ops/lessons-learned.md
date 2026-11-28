@@ -3,7 +3,7 @@
 | 项 | 内容 |
 | --- | --- |
 | 用途 | 沉淀 W0-W8 开发过程中**真实踩到的坑**与验证过的做法，供后续 Phase、子智能体派发上下文包、面试复盘复用 |
-| 版本 | v1.3（覆盖 W0-W4 P5，2026-11-28；41 条） |
+| 版本 | v1.4（覆盖 W0-W4，2026-11-28；43 条） |
 | 迭代方式 | **追加式**：每个 Phase 收尾时追加条目，不删旧条目（已失效的标记「已失效」并注明原因） |
 | 定位 | 不是教程，是「本项目在这台机器、这套基座上，什么会真的坏」的证据清单 |
 
@@ -368,6 +368,44 @@ Long countByCodeIncludeDeleted(@Param("code") String code);
 **根因**：Java `LocalDateTime` 纳秒精度 vs MySQL `datetime` 秒精度 / H2 `timestamp` 微秒精度。
 **修复**：`Duration.between(a, b).abs().toMillis() < 1` 之类容差比，不用 `assertEquals`。
 **影响面**：所有时间字段的断言。
+
+### L3-12 降级数据库唯一约束后，业务层那层「兜底拦截」必须同步撤掉（W4-P6 实证）
+
+**现象**：ADR-004 授权把 A 类唯一索引降级为普通索引（`sql/buildcloud/09-unique-index-realign.sql`），
+改完索引后「删掉 STEEL 再建 STEEL」**依然失败**——因为 W4-P2 为绕开 500 而加的
+`selectDeletedCount* > 0 → throw invalidParamException` 守卫还在，它把 ADR-004 要放行的动作又挡了回去。
+
+**根因**：两层防线是**成对**的。W4-P2 的时序是「索引是真防线（会撞 1062）→ 业务层提前拦下给可读提示」；
+ADR-004 拆掉第一层后，第二层就从「友好提示」变成「**虚假的唯一性约束**」——
+用户看到的文案（"仍占用唯一索引，请更换编码"）描述的现象已经不存在了。
+
+**修复**：降级索引的同一次提交里，删掉业务侧的「已删行探测」守卫，只保留「活跃行重名」校验；
+`selectDeletedCount*` 保留但改作审计/回归查询（用途写进 Javadoc，否则下一个人又会把它接回校验链）。
+
+**判别法**：改完索引后跑一遍**端到端业务动作**（不是查索引定义），`INSERT` 同码成功才算真降级；
+单测要断言「库里 1 活跃 + 1 已删并存」。
+
+**影响面**：任何「DB 约束 + Service 校验」双层的唯一性设计；W5-W7 新增表按 ADR-004 判 A/B 类时同样适用。
+
+### L3-13 验证「索引口径变化」的因果关系，要在一次性探针库做前后对比（W4-P6 实证）
+
+**现象**：主库上「删后重建成功」只能证明**现在能用**，证明不了「是这个索引造成的」；
+而要证明就得把主库索引回退成唯一，等于把生产口径改回去（R-4）。
+
+**做法**：`DROP DATABASE IF EXISTS bc_p6_probe; CREATE DATABASE bc_p6_probe;` 复制目标表 DDL，
+在同一份数据上跑两遍同一个动作：
+- before（唯一索引）：`ERROR 1062 Duplicate entry '1-XXX' for key 'bc_material_category.uk_material_category_code'`；
+- after（09 脚本的 DDL）：INSERT 成功，库中 1 活跃 + 1 已删。
+唯一变量是索引口径，因果成立。探针库用完可随时 DROP，不污染主库。
+
+**两个 SQL 小坑**（做探针脚本时踩到）：
+1. `SET @@error_count = 0` 不合法——`@@error_count` 是**只读**会话变量，重置只能靠 `SHOW WARNINGS` 顺带完成；
+   脚本要自己维护计数（handler 里写用户变量）。
+2. 裸 `INSERT` 撞 1062 会让 `mysql < file` **当场中断**（exit=1），后面的断言全跑不到；
+   把待测语句包进带 `CONTINUE HANDLER FOR 1062` 的存储函数并返回 0/1，脚本才能一路跑到底。
+   （另：`CREATE FUNCTION` 在开启 binlog 的 MySQL 8 上需要 `log_bin_trust_function_creators=1`。）
+
+**影响面**：所有「改约束/改索引/改口径」的验收；W5 的 V2 索引调优可复用同一套路。
 
 ---
 

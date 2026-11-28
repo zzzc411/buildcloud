@@ -77,7 +77,7 @@ public interface MaterialCategoryMapper extends BaseMapperX<MaterialCategoryDO> 
     }
 
     /**
-     * 按编码查询目录（唯一键 uk_material_category_code 的业务侧校验入口）
+     * 按编码查询目录（ADR-004 A 类口径下，唯一性校验的唯一入口）
      *
      * **只查未删除的行**：走 MyBatis-Plus 逻辑删除，用于「正常重复」的快速判定。
      *
@@ -89,22 +89,27 @@ public interface MaterialCategoryMapper extends BaseMapperX<MaterialCategoryDO> 
     }
 
     /**
-     * 统计某编码被**已逻辑删除**的行占用的数量（真库唯一索引冲突的前置探测）
+     * 统计某编码被**已逻辑删除**的行占用的数量
      *
-     * 为什么需要它（真实缺陷，W4-P2 联调实测）：
-     * 真库 uk_material_category_code(tenant_id, code) 是**普通唯一索引**，不感知 deleted 列——
+     * ========== 历史（W4-P2，问题现场） ==========
+     * 当初真库 uk_material_category_code(tenant_id, code) 是**普通唯一索引**，不感知 deleted 列——
      * 逻辑删除（deleted=1）的行**仍然占用**该编码。于是「删掉目录 A(STEEL) 再新建 STEEL」时：
      * {@link #selectByCode} 因逻辑删除过滤而查不到 → Service 校验通过 → INSERT 撞索引 →
      * DuplicateKeyException → 前端只拿到 `code=500 系统异常`，完全无法自助解决。
+     * 这个方法在当时的作用是「提前探测并给出可读提示」，避免 500。
+     *
+     * ========== 现状（W4-P6，ADR-004 落地后） ==========
+     * `sql/buildcloud/09-unique-index-realign.sql` 已把该索引降级为**普通索引**
+     * （`idx_material_category_code`），「同编码 + 一条活跃 + 若干已删」从此是合法数据，
+     * 「删后重建同编码」**能够成功**。因此 Service 层**不再需要用本方法拦截**——
+     * 拦下它反而会挡掉 ADR-004 明确要放行的业务动作（目录撤销后重建同编码是常态）。
+     * 本方法保留的用途只剩两个：
+     * 1. **审计/运维查询**：管理端展示「这个编码历史上被删过几次」；
+     * 2. **回归护栏**：W4-P6 的单测用它断言「逻辑删除行确实还在库里」（不是物理删除）。
      *
      * 这条用原生 @Select，因此：
      * - 逻辑删除插件不生效（正是我们要的：能看见已删行）；
      * - 多租户插件仍生效（tenant_id 条件由基座自动追加，无需手写）。
-     *
-     * 注意：**本方法只做「探测 + 给出可读错误」，不绕过索引**。要让「删后可重建同编码」
-     * 真正成立，需要改真库唯一键（把 deleted 纳入键，或删除时改写 code），
-     * 那属 AGENTS R-4「改数据库结构」，须先问人并由 P1 的 07-material.sql 统一决策，
-     * 不在本 Phase 单方面改动。
      *
      * @param code 目录编码
      * @return 已删除行数量

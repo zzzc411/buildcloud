@@ -6,6 +6,14 @@
 --             索引随建表语句内联声明（建表时若表已存在则整句跳过，无需单独判断索引）。
 -- 执行：mysql -u<user> -p"<PWD>" --default-character-set=utf8mb4 ruoyi-vue-pro < 01-project.sql
 --       ⚠️ 必须带 --default-character-set=utf8mb4，否则中文注释与数据会双重编码（lessons-learned L2-10）
+--
+-- 【唯一索引口径 —— ADR-004，本文件与生产库的分工必须看懂】
+--   本文件保留 `CREATE TABLE` 里的业务唯一索引，作为**新建库的初始防线**（先严后松比一开始无约束安全）；
+--   生产库的最终口径由 `09-unique-index-realign.sql` 归一：A 类（编码/单号，逻辑删除后允许同编码重建）
+--   的唯一索引会被**降级为普通索引**，B 类（结构唯一）保留唯一索引。
+--   即：新建库跑 01/03/07 后再跑一次 09，即得与生产一致的口径。本域涉及：
+--     A 类 → bc_project.uk_project_no
+--     B 类 → bc_project_member.uk_project_user（保留唯一索引）
 -- =====================================================================================
 
 -- ------------------------------------------------------------------------------------
@@ -45,6 +53,8 @@ CREATE TABLE IF NOT EXISTS `bc_project`
     `deleted`          bit(1)       NOT NULL DEFAULT b'0' COMMENT '是否删除',
     PRIMARY KEY (`id`) USING BTREE,
     -- 业务唯一键：项目编号在租户内唯一（逻辑删除的记录不参与唯一性判断由业务层保证）
+    -- **（A 类：逻辑删除后允许同编码重建，见 ADR-004；生产口径由 09-unique-index-realign.sql 归一）**
+    -- 归一后本键变为普通索引（同名 uk_project_no），唯一性完全由 Service 层「查全量含已删行」承担。
     UNIQUE KEY `uk_project_no` (`tenant_id`, `project_no`) USING BTREE,
     -- 台账查询主路径：按部门（数据权限）+ 按状态筛选
     KEY `idx_dept_id` (`dept_id`) USING BTREE,
@@ -108,6 +118,7 @@ CREATE TABLE IF NOT EXISTS `bc_project_member`
     `deleted`      bit(1)       NOT NULL DEFAULT b'0' COMMENT '是否删除',
     PRIMARY KEY (`id`) USING BTREE,
     -- 一人在一个项目内只有一个成员身份（角色变更走 UPDATE）
+    -- **（B 类：结构唯一，按 ADR-004 保留数据库唯一索引作并发防线；09 脚本不动它）**
     UNIQUE KEY `uk_project_user` (`tenant_id`, `project_id`, `user_id`) USING BTREE,
     -- 反向查询：某用户参与哪些项目（成员白名单数据权限用）
     KEY `idx_user_id` (`user_id`) USING BTREE,

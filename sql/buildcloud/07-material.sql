@@ -19,6 +19,14 @@
 -- 命名说明：文件序号 07 —— README 早先预留的 `04-material.sql` 号段已被
 --           `04-project-approval.sql` / `05-bpm-seed.sql` / `06-contract-approval.sql` 占用，
 --           按「每个文件只增不改」约定顺延取下一个空号。
+--
+-- 【唯一索引口径 —— ADR-004】本文件保留 `CREATE TABLE` 内的唯一索引作为新建库的初始防线；
+--   生产口径由 `09-unique-index-realign.sql` 归一。本域涉及：
+--     A 类 → bc_material_category.uk_material_category_code、bc_material.uk_material_no、
+--            bc_supplier.uk_supplier_no、bc_requisition.uk_req_no
+--            （归一后为普通索引 idx_* / 同名普通索引，允许「删后同编码重建」）
+--     B 类 → bc_material_stock.uk_project_material（保留唯一索引：W5 并发热点行的并发防线）
+--   详见 docs/decisions/004-unique-index-with-logical-delete.md。
 -- =====================================================================================
 
 -- ------------------------------------------------------------------------------------
@@ -46,6 +54,9 @@ CREATE TABLE IF NOT EXISTS `bc_material_category`
     `deleted`     bit(1)       NOT NULL DEFAULT b'0' COMMENT '是否删除',
     PRIMARY KEY (`id`) USING BTREE,
     -- 目录编码租户内唯一（逻辑删除行不参与唯一性判断由业务层查重时过滤 deleted）
+    -- **（A 类：逻辑删除后允许同编码重建，见 ADR-004；生产口径由 09-unique-index-realign.sql 归一）**
+    -- 归一后为普通索引 idx_material_category_code，唯一性由 Service 层「查全量含已删行」承担；
+    -- 这是 ADR-004 的直接触发点（W4-P2 实测：删 STEEL 再建 STEEL 曾返 500）。
     UNIQUE KEY `uk_material_category_code` (`tenant_id`, `code`) USING BTREE,
     -- 树形加载主路径：按 parent_id 查直接子节点（一次查全树 = 查全表后内存组树）
     KEY `idx_parent_id` (`parent_id`) USING BTREE
@@ -79,6 +90,8 @@ CREATE TABLE IF NOT EXISTS `bc_material`
     `deleted`      bit(1)       NOT NULL DEFAULT b'0' COMMENT '是否删除',
     PRIMARY KEY (`id`) USING BTREE,
     -- 物料编码租户内唯一（申领/入库按编码反查的唯一性前提）
+    -- **（A 类：逻辑删除后允许同编码重建，见 ADR-004；生产口径由 09-unique-index-realign.sql 归一）**
+    -- 归一后为普通索引 idx_material_no，唯一性由 Service 层「查全量含已删行」承担。
     UNIQUE KEY `uk_material_no` (`tenant_id`, `material_no`) USING BTREE,
     -- 按目录筛物料（目录树点击后的列表主路径）
     KEY `idx_category_id` (`category_id`) USING BTREE,
@@ -112,6 +125,8 @@ CREATE TABLE IF NOT EXISTS `bc_supplier`
     `deleted`        bit(1)       NOT NULL DEFAULT b'0' COMMENT '是否删除',
     PRIMARY KEY (`id`) USING BTREE,
     -- 供应商编码租户内唯一
+    -- **（A 类：逻辑删除后允许同编码重建，见 ADR-004；生产口径由 09-unique-index-realign.sql 归一）**
+    -- 归一后为普通索引 idx_supplier_no。
     UNIQUE KEY `uk_supplier_no` (`tenant_id`, `supplier_no`) USING BTREE,
     KEY `idx_name` (`name`) USING BTREE
 ) ENGINE = InnoDB
@@ -154,6 +169,7 @@ CREATE TABLE IF NOT EXISTS `bc_material_stock`
     `deleted`        bit(1)         NOT NULL DEFAULT b'0' COMMENT '是否删除',
     PRIMARY KEY (`id`) USING BTREE,
     -- 同项目同物料唯一：并发热点行 + 扣减原子性的前提（W5 压测对照组）
+    -- **（B 类：结构唯一 —— 重复即数据错误，按 ADR-004 保留数据库唯一索引作并发防线；09 脚本不动它）**
     UNIQUE KEY `uk_project_material` (`tenant_id`, `project_id`, `material_id`) USING BTREE,
     -- 反向查询：某物料在各项目的库存分布（跨项目调拨/汇总）
     KEY `idx_material_id` (`material_id`) USING BTREE
@@ -199,6 +215,10 @@ CREATE TABLE IF NOT EXISTS `bc_requisition`
     `deleted`            bit(1)       NOT NULL DEFAULT b'0' COMMENT '是否删除',
     PRIMARY KEY (`id`) USING BTREE,
     -- 申领单号租户内唯一：MQ 消费者幂等（spec §6.1「以 req_no 唯一索引防重复投递」）
+    -- **（A 类：逻辑删除后允许同编码重建，见 ADR-004；生产口径由 09-unique-index-realign.sql 归一）**
+    -- ⚠️ 归一后为普通索引 idx_req_no：**幂等不能再依赖本索引**，须由
+    --   ① 单据状态 CAS（`UPDATE ... WHERE status = 期望值`，影响行数 0 即幂等返回）；
+    --   ② 流水的 (biz_no, biz_type) 业务键；③ 单号随机段三重兜底。W5 的 MQ 消费者必须走 ①。
     UNIQUE KEY `uk_req_no` (`tenant_id`, `req_no`) USING BTREE,
     -- 项目内申领单列表（项目详情/数据权限过滤后的主路径）
     KEY `idx_project_id` (`project_id`) USING BTREE,

@@ -18,6 +18,7 @@ import static cn.iocoder.yudao.framework.test.core.util.RandomUtils.randomPojo;
 import static com.buildcloud.material.enums.ErrorCodeConstants.SUPPLIER_NOT_EXISTS;
 import static com.buildcloud.material.enums.ErrorCodeConstants.SUPPLIER_NO_DUPLICATE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -80,22 +81,39 @@ public class SupplierServiceImplTest extends BaseDbUnitTest {
     }
 
     @Test
-    public void testCreateSupplier_supplierNoOccupiedByDeletedRow() {
-        // mock 数据：建一条供应商并逻辑删除（模拟真库：deleted=1 的行仍占用 uk_supplier_no）
-        SupplierDO deleted = insertSupplier("SUP-DELETED", "已删供应商");
-        supplierMapper.deleteById(deleted.getId());
+    public void testCreateSupplier_rebuildAfterLogicalDelete_succeeds() {
+        // ===== ADR-004 A 类验收（W4-P6）：供应商编码「删后可重建」必须**成功** =====
+        // 历史：W4-P2 时已删行仍占 uk_supplier_no → 同编码重建返回 500；
+        //       ADR-004 把索引降级为普通索引 idx_supplier_no，唯一性只约束活跃行。
+        SupplierDO deleted = insertSupplier("SUP-REBUILD", "已删供应商");
+        Long deletedId = deleted.getId();
+        supplierMapper.deleteById(deletedId);
+        assertEquals(1L, supplierMapper.selectDeletedCountBySupplierNo("SUP-REBUILD"),
+                "逻辑删除行仍在库中，仍占用 supplier_no（索引冲突来源）");
+        assertNull(supplierMapper.selectBySupplierNo("SUP-REBUILD"), "逻辑删除插件过滤后看不到已删行");
 
         // 准备参数：用同一编码重建
         SupplierSaveReqVO createReqVO = randomPojo(SupplierSaveReqVO.class, o -> {
             o.setId(null);
-            o.setSupplierNo("SUP-DELETED");
+            o.setSupplierNo("SUP-REBUILD");
             o.setName("重建供应商");
             o.setStatus(0);
         });
 
-        // 断言：给出可读提示，而不是撞唯一索引返回 500
-        ServiceExceptionAssert.assertInvalidParam(
-                () -> supplierService.createSupplier(createReqVO), "SUP-DELETED");
+        // 调用：必须成功
+        Long newId = supplierService.createSupplier(createReqVO);
+
+        // 断言：新 id 与已删行不同；库里 1 活跃 + 1 已删（L3-10：返回值与库值一致）
+        //   注意 selectCount 走逻辑删除插件只能看到活跃行，已删行须用原生 SQL 的 selectDeletedCount*。
+        assertNotNull(newId);
+        assertNotEquals(deletedId, newId);
+        assertEquals(1, supplierMapper.selectCount(SupplierDO::getSupplierNo, "SUP-REBUILD"),
+                "活跃行应只有新建的这一条");
+        assertEquals(1, supplierMapper.selectDeletedCountBySupplierNo("SUP-REBUILD"),
+                "已删行仍在，与新行并存（ADR-004 A 类的核心效果）");
+        assertEquals("重建供应商", supplierMapper.selectById(newId).getName());
+        assertEquals(newId, supplierMapper.selectBySupplierNo("SUP-REBUILD").getId(),
+                "Service 校验视图应返回新行，不是已删行");
     }
 
     @Test

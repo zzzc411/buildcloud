@@ -88,6 +88,7 @@ docs/
 | `architecture/codegen-demo-vue/` | 2026-11-26 | 生效 | 代码生成器 Vue 四件套示例（bc_project，W2-P4 精修产物） |
 | `architecture/er-diagram-v0.md` | 2026-11-27 | 生效 | 项目域 + 合同域 ER 图 v0（7 表 66 列，W8 定稿） |
 | `decisions/004-unique-index-with-logical-delete.md` | 2026-11-27 | 生效 | ADR-004：逻辑删除与业务唯一约束口径（A 类 Service 校验 / B 类保留索引） |
+| `testing/demo-script-w4.md` | 2026-11-28 | 生效 | W4 端到端演示走查手册（申领→会签→出库→退料→对账，含 curl 与对账 SQL；**非性能报告**） |
 | `decisions/003-bpm-callback-forwarder.md` | 2026-11-27 | 生效 | ADR-003：BPM 审批结果跨服务回调转发器（push，含 pull 降级预案） |
 | `decisions/002-nacos-namespace.md` | 2026-11-25 | 生效 | ADR-002：本地 Nacos 命名空间改用 public（临时，W2 再评估） |
 | `architecture/arch-overview-v0.md` | 2026-11-25 | 生效 | 架构图 v0（读码定稿版，含与 spec §3.1 差异标注） |
