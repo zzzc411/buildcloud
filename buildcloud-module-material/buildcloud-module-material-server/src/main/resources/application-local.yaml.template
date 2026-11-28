@@ -87,8 +87,17 @@ spring:
 --- #################### MQ 消息队列相关配置 ####################
 
 # rocketmq 配置项，对应 RocketMQProperties 配置类
+#
+# ⚠️ producer.group 是**必填**：`RocketMQAutoConfiguration` 的 checkProperties() 里
+#    有 `[rocketmq.producer.group] must not be null` 断言，缺它会导致**整个自动装配被跳过**，
+#    RocketMQTemplate bean 根本不会创建，启动报
+#    `A component required a bean of type 'org.apache.rocketmq.spring.core.RocketMQTemplate'`。
+#    （W5-P3 实证：只配 name-server 不够，加了这一行才好）
+#    group 命名：与服务名一致，便于在 Broker 侧按实例观察堆积与消费进度。
 rocketmq:
   name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876} # RocketMQ Namesrv，环境变量 ROCKETMQ_NAME_SERVER
+  producer:
+    group: ${ROCKETMQ_PRODUCER_GROUP:buildcloud-material-producer} # 生产者组（必填）
 
 --- #################### 定时任务相关配置 ####################
 

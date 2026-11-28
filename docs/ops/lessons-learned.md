@@ -3,7 +3,7 @@
 | 项 | 内容 |
 | --- | --- |
 | 用途 | 沉淀 W0-W8 开发过程中**真实踩到的坑**与验证过的做法，供后续 Phase、子智能体派发上下文包、面试复盘复用 |
-| 版本 | v1.8（覆盖 W0-W5P3，2026-11-28；50 条；L3-16 已修正） |
+| 版本 | v1.9（覆盖 W0-W5P3，2026-11-28；51 条） |
 | 迭代方式 | **追加式**：每个 Phase 收尾时追加条目，不删旧条目（已失效的标记「已失效」并注明原因） |
 | 定位 | 不是教程，是「本项目在这台机器、这套基座上，什么会真的坏」的证据清单 |
 
@@ -485,6 +485,32 @@ static String env(String k){ return System.getProperty(k, System.getenv(k)); }
 2. 汇报必须贴 `Tests run / Skipped / Errors` **三个数字**，且 skip 数要能解释；
 3. 怀疑测试没真跑时，看 `target/surefire-reports/*.txt`，不要只看 `BUILD SUCCESS`；
 4. **主控复核时至少单独跑一次集成测试**，确认 `skipped=0`。
+
+### L2-18 `rocketmq.producer.group` 缺失会让**整个 RocketMQ 自动装配静默跳过**（W5-P3 实证）
+
+**现象**：material 服务启动失败——`A component required a bean of type 'org.apache.rocketmq.spring.core.RocketMQTemplate' that could not be found`。但依赖明明在 fat jar 里（`BOOT-INF/lib/rocketmq-spring-boot-starter-2.3.6.jar`），配置也有 `rocketmq.name-server`。
+
+**根因**：`RocketMQAutoConfiguration.checkProperties()` 里有一条硬断言：
+```
+[rocketmq.producer.group] must not be null
+```
+缺这个配置时，**整个自动装配类被跳过**（不是只跳过 producer 部分），于是 `RocketMQTemplate`、`DefaultMQProducer` 全都不创建。**只配 `name-server` 是不够的。**
+
+**排查路径（可复用）**：
+1. 看 jar 里有没有依赖：`jar tf xxx.jar | grep rocketmq`
+2. 看自动装配声明在不在：解压 `rocketmq-spring-boot-*.jar` 查 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`
+3. 看自动装配的**条件与断言**：`javap -v -cp <解压目录> org.apache.rocketmq.spring.autoconfigure.RocketMQAutoConfiguration | grep 'must not be null'`
+
+**修复**：
+```yaml
+rocketmq:
+  name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}
+  producer:
+    group: ${ROCKETMQ_PRODUCER_GROUP:buildcloud-material-producer}   # ← 必填
+```
+修复后日志出现 `a producer (buildcloud-material-producer) is started`，消费者容器也正常注册。
+
+**影响面**：所有要用 RocketMQ 的自研模块（material 已修；report/W6 若用 MQ 要同步）；模板与 `application-local.yaml` **两处都要改**（前者入库、后者本地）。
 
 ### L3-17 主控的 `git add -A` 会「回退」worker 的在途改动，让 worker 误判有并行写者（W5-P3 实证）
 
