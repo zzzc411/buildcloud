@@ -36,6 +36,7 @@
 | R-7 | **`git clone` 到全新目录编译必须作为「仓库完整性」标准动作**，每个里程碑做一次。本地工作区磁盘状态会系统性掩盖 `.gitignore` 误伤（W2 实证：裸 `data/` 规则漏掉基座 `DictData*VO` 四类，本地无感、干净 clone 直接编译失败）。 |
 | R-8 | **自研模块 DO 一律 `extends TenantBaseDO`**（不是 `BaseDO`）——表有 `tenant_id` 时多租户插件只对 `TenantBaseDO` 生效，生成器不会替你判断，精修必检。 |
 | R-9 | **自研 Controller 首段路径 = 服务标识**（如 `/buildcloud-project/project`，对照基座 `/system/dict-type`）。基座只自动加 `/admin-api`，模块名不进 URL；写错会导致直连通、经网关 404。 |
+| R-10 | **每次写完代码必须走一遍 `code-reviewer` skill 评审再提交/进入下一阶段**。评审覆盖七个维度（正确性/可维护性/可读性/效率/安全/边界与错误处理/可测试性），Critical 项必须修完；主控合并前**独立再评审一次**。详见 `.agents/skills/code-reviewer/SKILL.md`。 |
 
 ## 4. 工程规范（与基座对齐）
 
@@ -63,7 +64,8 @@
 7. **环境注意**：Windows + PowerShell（工作区 `D:\project\buildcloud` 路径无空格，引用其他含空格路径仍要引号）；**构建/运行基座需显式 JDK 17**（本机 PATH 默认为 JDK 21，Temurin 17 位于 `D:\project\tools\jdk-17.0.21.1+2`，Maven 构建前设 `JAVA_HOME` 指向它）；Docker Desktop 可用但 16G 内存——起全栈前先看 `docs/ops/middleware-limits.md`（W1 产出）中的资源限额，必要时分批启动；
 8. **遇到阻塞**：连试两种合理方案仍不通，写清现象与尝试记录，标记计划状态为「阻塞」并求助，不要静默绕过或降低验收标准；
 9. **派发前先读经验库**：`docs/ops/lessons-learned.md` 是实证踩坑清单（环境/基座/流程三类），派发 worker 时把相关条目（如 L1-1 Maven 引号、L2-2 TenantBaseDO、L2-5 探活口径）贴进上下文包，比只说「注意兼容性」有效；
-10. **验收标准写成可执行命令**：不用「管理端可登录」，用「`POST /auth/login` 返回 `code=0` 且 `menus=28`」。命令化验收才能暴露「HTTP 200 + JSON body `code=401`」这类基座契约差异。
+10. **验收标准写成可执行命令**：不用「管理端可登录」，用「`POST /auth/login` 返回 `code=0` 且 `menus=28`」。命令化验收才能暴露「HTTP 200 + JSON body `code=401`」这类基座契约差异；
+11. **写完代码必须自评审**：调用 `code-reviewer` skill 走完七个维度，Critical 修完再提交（R-10）。**汇报时必须写清 `Tests run / Skipped / Errors` 三个数字**——依赖中间件的集成测试会静默跳过，只看 `BUILD SUCCESS` 会拿到假绿（lessons L3-16）。
 
 ## 7. 沟通与口径（对外表述）
 

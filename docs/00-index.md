@@ -31,10 +31,12 @@ docs/
 | --- | --- | --- |
 | 1 | [spec v1.2](spec/buildcloud-spec-v1.2.md) | 项目宪法：范围、架构、里程碑、决策记录 D1-D23 |
 | 2 | [plans/00-overview.md](plans/00-overview.md) | 计划清单、依赖图与进度 |
-| 3 | [plans/_dispatch.md](plans/_dispatch.md) | 子智能体派发指南（整周/单 Phase 派工的操作手册） |
+| 3 | [plans/_dispatch.md](plans/_dispatch.md) | 子智能体派发指南（含**强制代码评审**步骤） |
 | 4 | [plans/_template.md](plans/_template.md) | 开发计划的标准结构（Phase 派发单元） |
-| 5 | 根目录 `README.md` | 项目骨架与快速开始 |
-| 6 | 根目录 `AGENTS.md` | 人与智能体共同遵守的开发约束（红线） |
+| 5 | [ops/lessons-learned.md](ops/lessons-learned.md) | **实战经验与踩坑记录**（46 条，派发上下文包必读） |
+| 6 | 根目录 `README.md` | 项目骨架与快速开始 |
+| 7 | 根目录 `AGENTS.md` | 人与智能体共同遵守的开发约束（红线 R-1~R-10） |
+| 8 | `.agents/skills/code-reviewer/SKILL.md` | **代码评审 skill**（每次写完代码必跑，AGENTS R-10） |
 
 ## 版本与命名规范（文档迭代）
 

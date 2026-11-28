@@ -47,6 +47,7 @@ worker 完成并自查 ──▶ 交付（代码+文档+进度日志） ──�
 
 【0. 先读约束】
 读 D:\project\buildcloud\AGENTS.md（红线：密钥零提交 / 不改基座包名 / 编译不过不提交…），全部适用。
+读 D:\project\buildcloud\docs\ops\lessons-learned.md 中与本 Phase 相关的条目（环境/基座/流程三类）。
 
 【1. 任务】
 计划：D:\project\buildcloud\docs\plans\plan-w{N}-{scope}.md
@@ -60,7 +61,7 @@ worker 完成并自查 ──▶ 交付（代码+文档+进度日志） ──�
 - 计划文件本身（重点看 Phase 表与验收标准）
 
 【3. 环境】
-工作区 D:\project\buildcloud（Windows + PowerShell，JDK 17）。在分支 {branch} 上工作。
+工作区 D:\project\buildcloud（Windows + PowerShell，JDK 17 在 D:\project\tools\jdk-17.0.21.1+2）。在分支 {branch} 上工作。
 {分批启动/内存限制等专项提示，如适用}
 
 【4. 交付物（来自计划，逐项）】
@@ -72,13 +73,18 @@ worker 完成并自查 ──▶ 交付（代码+文档+进度日志） ──�
 - [ ] {验收 2}
 
 【6. 完成动作】
-1. 自查：编译/相关单测通过；git diff 无密钥与敏感信息。
-2. 在计划文件「进度日志」末尾追加一行：日期 + Phase{N} + 做了什么/结果。
-3. 按 AGENTS.md §5 提交（`{type}: 一句话`），一个 Phase 一个或少量提交。
-4. 汇报：列出触碰的文件、提交哈希、遗留问题（若有）。
+1. 自查：编译/相关单测通过；git diff 无密钥与敏感信息。汇报须写清 `Tests run / Skipped / Errors` 三个数字（lessons L3-16：跳过的测试要能解释，否则视为假绿）。
+2. **代码评审（强制）**：调用 `code-reviewer` skill 对本 Phase 全部改动走一遍评审（正确性/可维护性/可读性/效率/安全/边界与错误处理/可测试性），
+   把 Critical 项修完；Improvements/Nitpicks 在处理后说明取舍。评审结论写进汇报。
+3. 在计划文件「进度日志」末尾追加一行：日期 + Phase{N} + 做了什么/结果 + 评审结论。
+4. 按 AGENTS.md §5 提交（`{type}: 一句话`），一个 Phase 一个或少量提交。
+5. 汇报：列出触碰的文件、提交哈希、评审摘要、遗留问题（若有）。
 
 遇到阻塞（两种合理方案仍不通）：停下，写清现象与尝试，报告主控，不要静默绕过或降低验收标准。
 ```
+
+> **评审是强制步骤，不是可选项**：不完成 `code-reviewer` 评审的 Phase 视为未交付，主控验收时直接退回。
+> 主控在合并前**独立再跑一次** `code-reviewer`（复核 worker 的自评是否到位），两次结论不一致时以主控为准。
 
 ## 5. 验收与合并（主控职责）
 

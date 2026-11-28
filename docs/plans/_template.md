@@ -37,6 +37,8 @@
 ## 3. 计划级验收标准（出口条件，来自 spec）
 
 - [ ] {spec 对应周/专项的验收标准，逐条细化}
+- [ ] **代码评审通过**（`code-reviewer` skill 七维度，Critical 清零 — AGENTS R-10）
+- [ ] 汇报含 `Tests run / Skipped / Errors` 三个数字且 skip 可解释（lessons L3-16）
 - [ ] 进度日志最后一行写明结果；`00-overview.md` 状态同步
 
 ## 4. 涉及范围（改动声明）
