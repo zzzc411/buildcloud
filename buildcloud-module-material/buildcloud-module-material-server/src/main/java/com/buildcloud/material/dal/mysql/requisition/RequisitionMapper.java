@@ -252,4 +252,35 @@ public interface RequisitionMapper extends BaseMapperX<RequisitionDO> {
                   @Param("fromStatus") Integer fromStatus,
                   @Param("toStatus") Integer toStatus);
 
+    // ========== V2 申领扣减（MQ 消费者，W5-P2） ==========
+
+    /**
+     * **V2 消费幂等闸门**：已提交(1) → 已扣减(2) 的条件更新
+     *
+     * <pre>
+     *   UPDATE bc_requisition SET status = 2, update_time = NOW()
+     *    WHERE id = #{id} AND status = 1 AND deleted = 0
+     * </pre>
+     *
+     * ========== 为什么把"推进状态"放在扣减之后的最后一步，且必须影响 1 行 ==========
+     *
+     * 消费者一次消费做三件事：条件扣减库存 → 写流水 → 推进状态，**同一个本地事务**。
+     * 状态 CAS 放在最后，是因为它是「整单处理完毕」的凭证：
+     * - 影响行数 1：本次是"第一次处理成功"，事务提交后整单进入已扣减；
+     * - 影响行数 0：单据已不是已提交(1)——要么已被前一次投递处理成 2（**重复投递**，
+     *   此时整笔事务回滚、直接 ACK 即可），要么被人为取消/关闭（终态，同样 ACK 不再扣）。
+     * 这一条 SQL 就是 spec §6.1 幂等条款里的「消费状态表（或状态机判断）」在本项目的落地形态：
+     * 不额外建表，用状态机本身当消费状态。
+     *
+     * 与 {@link #updateStatusCas} 的区别：那个是通用 CAS（可写 approval_status / timeout_time），
+     * 这个**把 1→2 这条业务边写死在 SQL 里**——即便将来有人从别处调用，也不可能把
+     * 「已出库(3)」或「已取消(9)」的单据拉回已扣减（那会造成重复扣库存）。
+     *
+     * @param id 申领单编号
+     * @return 影响行数（1 = 本次首次处理成功；0 = 已被处理过或不在已提交态）
+     */
+    @Update("UPDATE bc_requisition SET status = 2, update_time = NOW() "
+            + "WHERE id = #{id} AND status = 1 AND deleted = 0")
+    int deductCas(@Param("id") Long id);
+
 }

@@ -20,9 +20,12 @@ import com.buildcloud.material.dal.mysql.stock.StockLogMapper;
 import com.buildcloud.material.enums.requisition.RequisitionApprovalStatusEnum;
 import com.buildcloud.material.enums.requisition.RequisitionStatusEnum;
 import com.buildcloud.material.enums.stock.StockBizTypeEnum;
+import com.buildcloud.material.service.requisition.mq.RequisitionDeductLocalTransactionService;
+import com.buildcloud.material.service.requisition.mq.RequisitionDeductMessageProducer;
 import com.buildcloud.material.service.requisition.strategy.RequisitionSubmitHandlerFactory;
 import com.buildcloud.material.service.requisition.strategy.RequisitionV1SubmitHandler;
 import com.buildcloud.material.service.requisition.strategy.RequisitionV2SubmitHandler;
+import com.buildcloud.material.service.stock.StockPredeductService;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -128,6 +131,25 @@ public class RequisitionApprovalServiceImplTest extends BaseDbUnitTest {
      */
     @MockBean
     private BpmProcessInstanceApi processInstanceApi;
+
+    /**
+     * W5-P2 起 {@code RequisitionV2SubmitHandler} 依赖 {@code StockPredeductService}（Redis 预扣），
+     * 而本类的 `@Import` 列表里包含它（V1/V2 两实现必须常驻，工厂才能分发）。
+     *
+     * 本类测的是 V1 链路与审批回落，**不涉及 Redis**，故用 `@MockBean` 占位；
+     * V2 的真实 Redis 行为由 {@code RequisitionV2SubmitHandlerTest} 与端到端集成测试覆盖。
+     */
+    @MockBean
+    private StockPredeductService stockPredeductService;
+    /**
+     * V2 处理器还依赖消息发送器与本地事务服务（@Resource 注入，缺 bean 会让整个容器起不来）。
+     * 本类测 V1/审批链路，不涉及 MQ，用 @MockBean 占位即可。
+     */
+    @MockBean
+    private RequisitionDeductMessageProducer requisitionDeductMessageProducer;
+
+    @MockBean
+    private RequisitionDeductLocalTransactionService requisitionDeductLocalTransactionService;
 
     // ========== 一、提交审批：扣库存 + 发起流程 ==========
 

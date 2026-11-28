@@ -61,6 +61,20 @@
             <groupId>cn.iocoder.cloud</groupId>
             <artifactId>yudao-spring-boot-starter-mq</artifactId>
         </dependency>
+        <!--
+          基座 starter-mq 把 rocketmq-spring-boot-starter 标了 optional（见该模块 .flattened-pom.xml），
+          **不会传递**——不在这里显式声明，编译期 classpath 里根本没有任何 org.apache.rocketmq 的类
+          （W5-P2 实测：mvn -X compile 的 compilePath、fat jar 的 BOOT-INF/lib 里都没有）。
+
+          这属于「基座 optional 依赖不传递」的已知问题，与 W1 给 4 个 server 显式补
+          yudao-spring-boot-starter-rpc（L2-4）、W4 补 yudao-module-bpm-api（L2-15）同源。
+          版本由 yudao-dependencies 托管（rocketmq-spring.version = 2.3.6），此处不写死版本。
+          决策记录见 docs/decisions/005-rocketmq-starter-optional.md（ADR-005）。
+        -->
+        <dependency>
+            <groupId>org.apache.rocketmq</groupId>
+            <artifactId>rocketmq-spring-boot-starter</artifactId>
+        </dependency>
         <!-- 业务组件：定时任务（库存对账 Job） -->
         <dependency>
             <groupId>cn.iocoder.cloud</groupId>

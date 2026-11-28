@@ -3,7 +3,7 @@
 | 项 | 内容 |
 | --- | --- |
 | 用途 | 沉淀 W0-W8 开发过程中**真实踩到的坑**与验证过的做法，供后续 Phase、子智能体派发上下文包、面试复盘复用 |
-| 版本 | v1.6（覆盖 W0-W5P1，2026-11-28；46 条） |
+| 版本 | v1.7（覆盖 W0-W5P2，2026-11-28；47 条；L3-16 已修正） |
 | 迭代方式 | **追加式**：每个 Phase 收尾时追加条目，不删旧条目（已失效的标记「已失效」并注明原因） |
 | 定位 | 不是教程，是「本项目在这台机器、这套基座上，什么会真的坏」的证据清单 |
 
@@ -453,17 +453,38 @@ docker exec bc-redis redis-cli -a $pw --no-auth-warning EVAL "$(docker exec bc-r
 **影响面**：所有用 Redisson 跑 Lua 的组件（W5 的预扣/回滚/对账修复、W6 的幂等消费都可能复用）。
 **教训**：AGENTS §6.3「不猜接口」不是口号——连"枚举常量名"这种一眼就对的东西都要 `javap` 看一眼。
 
-### L3-16 Redis 集成测试「静默跳过」= 假绿：Maven surefire fork 拿不到父进程环境变量（W5-P1 实证）
+### L3-16 集成测试「静默跳过」= 假绿：`System.getenv()` 读不到 `-D` 系统属性（W5-P1/P2 实证，**本条已修正过一次**）
 
-**现象**：`mvn test` 报 `Tests run: 177, Skipped: 16`——分不清是「环境不具备所以跳过」还是「代码没写」。**更要命的是：如果只加了 `$env:BC_TEST_REDIS_PASSWORD` 就以为能跑，实际 surefire fork 进程读不到，测试全 error**（ApplicationContext 加载失败：`Unable to connect to Redis`）。
-**根因**：① surefire 默认 fork 新 JVM，**父 shell 的 `$env:X` 不一定透传**；② 用 `cmd /c "set X=... && mvn ..."` 也不可靠（mvn 是 .bat，环境传递有边界）；③ 测试类用 `@EnabledIf` 探活时读不到密码就整类 skip，**看起来是绿的**。
-**正解（唯一可靠）**：用 `-DargLine` 显式注入 fork JVM：
+**现象**：`mvn test` 报 `Tests run: 237, Skipped: 16`——分不清是「环境不具备所以跳过」还是「代码没写」。控制台照样 `BUILD SUCCESS`。
+
+**根因链（三层）**：
+1. 测试用 `@EnabledIf("redisAvailable")` 探活，探活方法用 **`System.getenv()`** 读 `BC_TEST_REDIS_PASSWORD`；
+2. 我第一版给的「正解」是 `-DargLine=-DBC_TEST_REDIS_PASSWORD=xxx` —— **这是错的**：`-D` 注入的是 **JVM 系统属性**，`System.getenv()` **读不到**（要 `System.getProperty()`）。所以探活永远返回 false → 整类 skip；
+3. 更早还试过 `cmd /c "set X=... && mvn ..."`：能生效（环境变量确实传给了 mvn 子进程），但对密码这种含特殊字符的值易被 shell 解析干扰。
+
+**真正的正解（两种，按测试的读法选）**：
 ```powershell
+# A. 测试用 System.getenv() 读 → 用 cmd set（注意 set 与 && 之间不要空格，避免尾随空格进密码）
+cmd /c "set BC_TEST_REDIS_PASSWORD=$pw&& mvn -B -ntp -pl <module> test -Dtest=XxxIntegrationTest"
+
+# B. 测试用 System.getProperty() 读 → 用 -DargLine 注入 fork
 cmd /c "mvn -B -ntp -pl <module> test -Dtest=XxxIntegrationTest ""-DargLine=-DBC_TEST_REDIS_PASSWORD=$pw"""
 ```
-实测：注入前 16 error / 注入后 **run=16 errors=0 skipped=0**（9.6s 真连 Redis）。
+实测（2026-11-28）：A 方式 **run=16 / skipped=0 / 11.45s**（真连 Redis）；B 方式对 `System.getenv()` 探活**无效**（仍 skip）。
+
+**根治建议（推荐，尚未实施）**：探活方法**同时**兼容两者——
+```java
+static String env(String k){ return System.getProperty(k, System.getenv(k)); }
+```
+或干脆把「探活失败」从 `skip` 改为 **`fail`**——环境没准备好就该红，而不是静默通过。
+
 **影响面**：**所有依赖外部中间件的集成测试**（Redis/RocketMQ/MySQL 真实连接），W5-W6 会大量出现。
-**纪律**：① 集成测试的「跳过」必须在汇报里显式声明，不能只报「全绿」；② 有 skip 的测试数要与预期一致（例如「已知 16 个需要 Redis 的会 skip」，否则就是在掩盖真失败）；③ 怀疑测试没真跑时，看 `target/surefire-reports/*.txt` 的 `Tests run / Skipped / Errors`，不要只看控制台的 `BUILD SUCCESS`。
+
+**纪律（比方法更重要）**：
+1. 集成测试的「跳过」必须在汇报里**显式声明**，不能只报「全绿」；
+2. 汇报必须贴 `Tests run / Skipped / Errors` **三个数字**，且 skip 数要能解释；
+3. 怀疑测试没真跑时，看 `target/surefire-reports/*.txt`，不要只看 `BUILD SUCCESS`；
+4. **主控复核时至少单独跑一次集成测试**，确认 `skipped=0`。
 
 ---
 

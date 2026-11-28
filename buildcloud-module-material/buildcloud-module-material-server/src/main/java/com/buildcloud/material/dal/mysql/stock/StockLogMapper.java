@@ -94,4 +94,62 @@ public interface StockLogMapper extends BaseMapperX<StockLogDO> {
     BigDecimal selectSumQuantity(@Param("projectId") Long projectId,
                                  @Param("materialId") Long materialId);
 
+    /**
+     * 统计某张申领单在某物料上「已落库的申领扣减」总笔数（V2 消费幂等的**数据库侧判据**）
+     *
+     * <pre>
+     *   SELECT COUNT(1) FROM bc_stock_log
+     *    WHERE project_id = #{projectId} AND material_id = #{materialId}
+     *      AND biz_no = #{bizNo} AND biz_type = #{bizType} AND deleted = 0
+     * </pre>
+     *
+     * ========== 为什么幂等不能只看单据状态 ==========
+     *
+     * spec §6.1 的幂等条款允许「`req_no` 唯一索引 + 消费状态表（**或状态机判断**）」两种口径。
+     * 本项目选的是状态机判断，但**单据状态只能覆盖"整单"**：
+     * V2 是先 Redis 预扣（按物料逐个 Lua）、再一条消息携带多行明细。若消费者在第 2 行失败回滚，
+     * 单据仍是「已提交(1)」，此时重投必须**重新处理全部行**（不能跳行）；
+     * 而如果第 1 行的流水已经提交（不可能与本方法同事务，见消费者实现），
+     * 用「本单本物料是否已有 biz_type=2 流水」作判据就能精确到行。
+     *
+     * 所以真正的幂等顺序是：**先看单据状态（整单闸门）→ 再看本行流水（行级兜底）**，
+     * 本方法就是后者。
+     *
+     * @param projectId  项目编号（分片键，必带）
+     * @param materialId 物料编号
+     * @param bizNo      业务单号（= req_no）
+     * @param bizType    业务类型（= 2 申领扣减）
+     * @return 已有流水的条数（0 表示该行尚未扣减过）
+     */
+    @Select("SELECT COUNT(1) FROM bc_stock_log "
+            + "WHERE project_id = #{projectId} AND material_id = #{materialId} "
+            + "AND biz_no = #{bizNo} AND biz_type = #{bizType} AND deleted = 0")
+    Long selectCountByBizNoAndType(@Param("projectId") Long projectId,
+                                   @Param("materialId") Long materialId,
+                                   @Param("bizNo") String bizNo,
+                                   @Param("bizType") Integer bizType);
+
+    /**
+     * 查某张申领单在某物料上最后一条申领扣减流水（幂等短路时还原 balance_after 用）
+     *
+     * 用途见 {@code RequisitionDeductConsumer}：重复投递时若本行已扣过，直接 ACK，
+     * 但要能解释"为什么跳过"，日志里带上既有流水的 balance_after 便于对账比对。
+     *
+     * @param projectId  项目编号
+     * @param materialId 物料编号
+     * @param bizNo      业务单号
+     * @param bizType    业务类型
+     * @return 最新一条流水；没有返回 null
+     */
+    default StockLogDO selectLatestByBizNoAndType(Long projectId, Long materialId,
+                                                 String bizNo, Integer bizType) {
+        return selectOne(new LambdaQueryWrapperX<StockLogDO>()
+                .eq(StockLogDO::getProjectId, projectId)
+                .eq(StockLogDO::getMaterialId, materialId)
+                .eq(StockLogDO::getBizNo, bizNo)
+                .eq(StockLogDO::getBizType, bizType)
+                .orderByDesc(StockLogDO::getId)
+                .last("LIMIT 1"));
+    }
+
 }

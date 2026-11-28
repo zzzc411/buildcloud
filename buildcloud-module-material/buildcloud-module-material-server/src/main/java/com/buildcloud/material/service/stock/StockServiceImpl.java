@@ -14,6 +14,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
@@ -92,6 +94,14 @@ public class StockServiceImpl implements StockService {
     @Resource
     private StockLogMapper stockLogMapper;
 
+    /**
+     * Redis 预扣组件（W5-P2 接入：入库后同步 Redis 可用量）
+     *
+     * 见 {@link #syncRedisAfterInbound} 的顺序说明。
+     */
+    @Resource
+    private StockPredeductService stockPredeductService;
+
     // ========== 入库 ==========
 
     @Override
@@ -117,10 +127,90 @@ public class StockServiceImpl implements StockService {
                 .build();
         stockLogMapper.insert(stockLog);
 
+        // 4. 同步 Redis 可用量（W5-P2 新增；顺序与补偿策略见 syncRedisAfterInbound 的注释）
+        syncRedisAfterInbound(reqVO.getProjectId(), reqVO.getMaterialId(),
+                reqVO.getQuantity(), stock.getAvailableQty());
+
         log.info("[inbound] 入库成功 projectId={} materialId={} qty={} balanceAfter={} version={} bizNo={}",
                 reqVO.getProjectId(), reqVO.getMaterialId(), reqVO.getQuantity(),
                 stock.getAvailableQty(), stock.getVersion(), stockLog.getBizNo());
         return stockLog;
+    }
+
+    /**
+     * 入库后同步 Redis 可用量（spec §6.2 `pm:stock:{projectId}:{materialId}`）
+     *
+     * ========== 顺序选择：**先写 DB（同一事务内）→ 事务提交后**再写 Redis ==========
+     *
+     * 三个候选顺序，逐一说明为什么选第三个：
+     *
+     * | 顺序 | 问题 |
+     * | --- | --- |
+     * | ① 先写 Redis → 再写 DB | Redis 成功、DB 回滚时 Redis 多出一批"不存在的库存" → V2 预扣会允许**超卖**（凭空多出的量被预扣、消费者 DB 扣减时被 `available_qty >= qty` 拦住 → 死信 + 用户报错）。**这个方向的错是"超卖方向"，绝对不能选。** |
+     * | ② DB 与 Redis 都在事务内、Redis 调用放在 DB 写之后（但仍在未提交的事务里） | 看起来"DB 在前"，但 DB 还没提交：若随后 DB 提交失败回滚，Redis 已经加过了，结果与 ① 相同。**顺序里"先 DB"必须包含"已提交"才有意义。** |
+     * | ③ **DB 提交后**写 Redis（本次采纳，用 `TransactionSynchronization#afterCommit` 实现） | 唯一的失败方向是"DB 已入账、Redis 没加" → Redis 可用量**偏小** → 预扣更容易被拒（用户看到"库存不足"而 DB 其实有）。这是**少卖方向**，业务可接受，且**能自愈**（见下）。 |
+     *
+     * **失败补偿**：Redis 写失败时抛 {@code STOCK_PREDEDUCT_INIT_FAILED} 让**接口返回失败**，
+     * 但 DB 已经提交了——所以这是一次"部分成功"。这里的取舍要说清楚：
+     * - 入库是**管理动作**（低频、人工重试代价低），返回失败会比"静默成功"让管理员重试一次；
+     * - 重试会再加一次库存？**不会**：管理员看到失败会核对实际入库量再操作（这是管理流程的责任）；
+     * - 更重要的自愈路径：即便没人重试，下一次**申领**遇到 `NEED_INIT`（key 不存在）会从 DB 回填基线；
+     *   若是 key 存在但值偏小，P4 的对账 Job 会发现 `Redis.available != DB.available - Σ在途` 并修复。
+     * - 反过来若选"吞掉 Redis 异常只打日志"，问题会被藏起来，直到对账 Job 才暴露——本 Phase 的经验是
+     *   宁可让调用方看到失败（lessons：静默成功是最贵的缺陷）。
+     *
+     * ========== 为什么用 ACCUMULATE 而不是 RESET ==========
+     *
+     * 日常追加入库是"在现有可用量上加"，RESET 会把在途预扣明细（`pm:prededuct:{pid}:{mid}`）
+     * 一起清空——那些单据的状态还是「已提交(1)」，明细丢了它们的预扣就无处可回滚，
+     * 对账立刻不平（见 {@link StockPredeductService#initAvailable} 的 Javadoc）。
+     *
+     * 例外：**首笔入库**（Redis 里还没有这个 key）必须走 RESET，因为 ACCUMULATE 在无 key 时返回 -4。
+     * 判断依据不是"DB 里有没有这行库存"（入库刚写完，一定有），而是 **Redis 里有没有 key**——
+     * 所以这里先查一次 Redis（一次 GET，管理动作的量级可忽略）。
+     *
+     * ========== 为什么放在 afterCommit 而不是方法体最后一行 ==========
+     *
+     * {@code @Transactional} 方法体最后一行执行时**事务还没提交**。若在那时写 Redis，
+     * 之后提交失败（唯一键冲突/连接断）就会退化成上面的顺序 ②。
+     * {@code TransactionSynchronizationManager#registerSynchronization} 的 `afterCommit`
+     * 保证只在**提交成功之后**执行，从结构上消除这个窗口。
+     * @Transactional 的边界与 afterCommit 的时序在单测
+     * {@code StockServiceImplTest#testInbound_redisSync_* } 里用真实事务断言。
+     *
+     * @param projectId  项目编号
+     * @param materialId 物料编号
+     * @param delta      本次入库数量（正数，ACCUMULATE 的增量）
+     * @param balanceAfter 提交后的 DB 可用量（仅日志/排障用，不作为 Redis 的基线值）
+     */
+    private void syncRedisAfterInbound(Long projectId, Long materialId, BigDecimal delta, BigDecimal balanceAfter) {
+        Runnable syncTask = () -> {
+            // key 不存在 → 首笔入库/缓存丢失：用 DB 的最终值作为基线（RESET）
+            // key 存在 → 日常追加入库：在当前值上累加（ACCUMULATE，保留在途预扣明细）
+            BigDecimal redisAvailable = stockPredeductService.queryAvailable(projectId, materialId);
+            StockPredeductService.InitMode mode = redisAvailable == null
+                    ? StockPredeductService.InitMode.RESET
+                    : StockPredeductService.InitMode.ACCUMULATE;
+            BigDecimal qty = mode == StockPredeductService.InitMode.RESET ? balanceAfter : delta;
+            stockPredeductService.initAvailable(projectId, materialId, qty, mode);
+            log.info("[syncRedisAfterInbound][Redis 已同步 projectId={} materialId={} mode={} qty={} dbAvailable={}]",
+                    projectId, materialId, mode, qty, balanceAfter);
+        };
+
+        // 事务已提交（正常情况下必然如此，因为本方法是 @Transactional 方法的一部分）
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            // 没有事务上下文（被非事务调用方直接调用 / 单测裸调）：直接同步执行，
+            // 行为等价于"DB 语句已自动提交"。这样调用方不会因为少了一层事务而丢掉 Redis 同步。
+            log.debug("[syncRedisAfterInbound][无事务上下文，直接同步 Redis]");
+            syncTask.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                syncTask.run();
+            }
+        });
     }
 
     /**

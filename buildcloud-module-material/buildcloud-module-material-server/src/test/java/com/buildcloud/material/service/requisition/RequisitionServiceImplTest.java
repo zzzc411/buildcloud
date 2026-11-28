@@ -17,12 +17,16 @@ import com.buildcloud.material.enums.requisition.RequisitionApprovalStatusEnum;
 import com.buildcloud.material.enums.requisition.RequisitionModeEnum;
 import com.buildcloud.material.enums.requisition.RequisitionStatusEnum;
 import com.buildcloud.material.enums.stock.StockBizTypeEnum;
+import com.buildcloud.material.service.requisition.mq.RequisitionDeductLocalTransactionService;
+import com.buildcloud.material.service.requisition.mq.RequisitionDeductMessageProducer;
 import com.buildcloud.material.service.requisition.strategy.RequisitionSubmitHandlerFactory;
 import com.buildcloud.material.service.requisition.strategy.RequisitionV1SubmitHandler;
 import com.buildcloud.material.service.requisition.strategy.RequisitionV2SubmitHandler;
+import com.buildcloud.material.service.stock.StockPredeductService;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.jdbc.Sql;
 
@@ -110,6 +114,26 @@ public class RequisitionServiceImplTest extends BaseDbUnitTest {
 
     @Resource
     private RequisitionSubmitHandlerFactory submitHandlerFactory;
+
+    /**
+     * W5-P2 起 {@code RequisitionV2SubmitHandler} 依赖 {@code StockPredeductService}（Redis 预扣），
+     * 而本类的 `@Import` 列表里包含它（V1/V2 两实现必须常驻，工厂才能分发）。
+     *
+     * 本类测的是 V1 同步链路与**开关分发**，不涉及 Redis，故用 `@MockBean` 占位。
+     * 注意：与开关相关的用例（如「切到 V2 后行为不同」）若将来需要 Redis，
+     * 应当换成 {@code RequisitionV2SubmitHandlerTest} 里的内存 Stub 口径，而不是放开这个 mock。
+     */
+    @MockBean
+    private StockPredeductService stockPredeductService;
+    /**
+     * V2 处理器还依赖消息发送器与本地事务服务（@Resource 注入，缺 bean 会让整个容器起不来）。
+     * 本类测 V1/审批链路，不涉及 MQ，用 @MockBean 占位即可。
+     */
+    @MockBean
+    private RequisitionDeductMessageProducer requisitionDeductMessageProducer;
+
+    @MockBean
+    private RequisitionDeductLocalTransactionService requisitionDeductLocalTransactionService;
 
     /**
      * 每个用例前重置模式为默认 V1
@@ -748,24 +772,47 @@ public class RequisitionServiceImplTest extends BaseDbUnitTest {
     // ========== 七、V1/V2 开关 ==========
 
     @Test
-    public void testSubmitV2Mode_throwsNotImplemented() {
-        // 切到 V2 → 提交必须明确报「未实现」，绝不能静默回退 V1
-        // （否则 W5 压测会以为在压 V2、实际压的是 V1，对照实验失效）
+    public void testSubmitV2Mode_delegatesToV2AndKeepsDraftWhenStockMissing() {
+        // ========== W5-P2 后的口径变化（本条用例本来断言的是「V2 未实现」） ==========
+        //
+        // P4 时代 V2 是占位实现（抛 REQUISITION_MODE_NOT_IMPLEMENTED），本用例钉住的是
+        // 「切到 V2 必须明确失败、绝不静默回退 V1」。
+        // **W5-P2 已把 V2 实现为真链路**（Redis 预扣 + RockMQ 事务消息），因此"必须失败"的前提消失了；
+        // 但它的**真正目的**仍是必须守住的：切到 V2 之后，走的必须是 V2 那条链路，不能偷偷跑 V1。
+        //
+        // 这里用一个"DB 有库存、但 Redis 侧没有基线且本项目没有库存行"的场景来区分两条链路：
+        // - 若真的走了 V2：V2 处理器会先问 Redis（本类用 @MockBean 替身，未配置即返回 null/NOT_ENOUGH），
+        //   在预扣阶段就失败，**绝不碰 DB 库存**；
+        // - 若悄悄回退 V1：V1 会用行锁直接扣 DB，库存会变成 90、并写一条流水。
+        // 所以"库存仍是 100 且没有流水"就是"没有回退 V1"的硬证据。
+        //
+        // V2 自己的完整行为（预扣成功→消息→消费→账平）由 RequisitionV2SubmitHandlerTest
+        // 与端到端集成测试覆盖，不在本类重复。
         insertStock(1L, 1L, "100.0000");
         Long id = requisitionService.createRequisition(buildCreateReqVO(1L, item(1L, "10.0000")));
 
         System.setProperty(RequisitionSubmitHandlerFactory.CONFIG_KEY, RequisitionModeEnum.V2.getMode());
         try {
-            assertServiceException(() -> requisitionService.submitRequisition(id),
-                    REQUISITION_MODE_NOT_IMPLEMENTED, RequisitionModeEnum.V2.getMode());
+            // 本类的 StockPredeductService 是未配置的 mock：tryPrededuct 返回 null，
+            // 与"NEED_INIT/NOT_ENOUGH"一样会让 V2 处理器在预扣阶段抛出或降级
+            try {
+                requisitionService.submitRequisition(id);
+            } catch (RuntimeException ignored) {
+                // V2 链路的失败形态可以是业务异常（库存不足）或 NPE（mock 返回 null），
+                // 本条用例只关心"有没有偷偷跑 V1"，不关心 V2 自己怎么失败。
+            }
 
-            // 断言：没有任何副作用（未实现 = 完全不执行，而不是"做了半截再报错"）
-            assertQty("100", stockOf(1L, 1L).getAvailableQty());
-            assertTrue(stockLogMapper.selectListByProjectIdAndMaterialId(1L, 1L).isEmpty());
+            // 核心断言：V2 链路**不碰 DB 库存**（V1 链路会扣成 90）
+            assertQty("100", stockOf(1L, 1L).getAvailableQty(),
+                    "切到 V2 后不得回退 V1 同步扣减（DB 库存必须仍是 100）");
+            assertTrue(stockLogMapper.selectListByProjectIdAndMaterialId(1L, 1L).isEmpty(),
+                    "切到 V2 后不得产生同步扣减流水");
+            // 单据整体回滚：仍是草稿（V2 的"已提交(1)"依赖 Redis + 本地事务都成功）
             assertEquals(RequisitionStatusEnum.DRAFT.getStatus(),
-                    requisitionMapper.selectById(id).getStatus());
+                    requisitionMapper.selectById(id).getStatus(),
+                    "V2 提交失败时整单回滚，单据应回到草稿");
         } finally {
-            System.setProperty(RequisitionSubmitHandlerFactory.CONFIG_KEY, RequisitionModeEnum.V1.getMode());
+            System.clearProperty(RequisitionSubmitHandlerFactory.CONFIG_KEY);
         }
     }
 

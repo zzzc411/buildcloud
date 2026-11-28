@@ -13,6 +13,8 @@ import com.buildcloud.material.dal.mysql.stock.StockLogMapper;
 import com.buildcloud.material.enums.stock.StockBizTypeEnum;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -38,6 +40,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mockingDetails;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * {@link StockServiceImpl} 的单元测试类
@@ -71,6 +80,19 @@ public class StockServiceImplTest extends BaseDbUnitTest {
 
     @Resource
     private StockLogMapper stockLogMapper;
+
+    /**
+     * W5-P2 起 {@link StockServiceImpl} 依赖 {@link StockPredeductService}（入库后同步 Redis）。
+     *
+     * 本类是**入库链路**的单元测试，不变量（库存与流水一致、CAS 重试、并发不丢账）与 Redis 无关，
+     * 因此用 `@MockBean` 把 Redis 侧替换成无状态 mock：
+     * - 默认 `queryAvailable` 返回 null、`initAvailable` 什么都不做——语义等价于"Redis 首次初始化"；
+     * - 专门的 Redis 同步用例（本类 `testInbound_redisSync*`）用 `when(...)` 精确配置观察点；
+     * - **真 Redis 行为**（Lua 语义、累加/覆盖）由 `StockPredeductServiceIntegrationTest`
+     *   与 `RequisitionV2EndToEndIntegrationTest` 覆盖，不在本类重复。
+     */
+    @MockBean
+    private StockPredeductService stockPredeductService;
 
     /**
      * 用于在测试里手工控制事务边界（构造「未提交的并发写」场景）
@@ -631,6 +653,107 @@ public class StockServiceImplTest extends BaseDbUnitTest {
         assertQty(expected, stock.getAvailableQty());
         assertQty(expected, logSum);
         stockService.validateStockBalance(projectId, materialId);
+    }
+
+    // ========== 十一、入库后同步 Redis（W5-P2 新增） ==========
+
+    /**
+     * 首笔入库（Redis 里没有 key）：必须用 **RESET + DB 最终值** 建立基线
+     *
+     * 为什么不是 ACCUMULATE：Lua 的 accumulate 在 key 不存在时返回 -4（拒绝），
+     * 而且"首次建立基线"本来就该等于 DB 当前值，不是"在 0 上加"。
+     */
+    @Test
+    public void testInbound_redisSync_firstTime_usesResetWithDbBalance() {
+        // 默认 mock 的 queryAvailable 返回 null（= Redis 无 key），正是首笔入库的场景
+        stockService.inbound(buildInboundReqVO(7L, 7L, "100.0000", "首笔入库"));
+
+        ArgumentCaptor<StockPredeductService.InitMode> modeCaptor =
+                ArgumentCaptor.forClass(StockPredeductService.InitMode.class);
+        ArgumentCaptor<BigDecimal> qtyCaptor = ArgumentCaptor.forClass(BigDecimal.class);
+        verify(stockPredeductService).initAvailable(eq(7L), eq(7L), qtyCaptor.capture(), modeCaptor.capture());
+
+        assertEquals(StockPredeductService.InitMode.RESET, modeCaptor.getValue(),
+                "Redis 无 key 时必须用 RESET 建立基线（ACCUMULATE 会因无 key 被脚本拒绝）");
+        assertQty("100", qtyCaptor.getValue());
+    }
+
+    /**
+     * 追加入库（Redis 已有 key）：必须用 **ACCUMULATE + 本次增量**，保留在途预扣明细
+     */
+    @Test
+    public void testInbound_redisSync_secondTime_usesAccumulateWithDelta() {
+        // 第一笔：Redis 无 key（mock 默认返回 null）→ RESET
+        stockService.inbound(buildInboundReqVO(7L, 7L, "100.0000", "第一笔"));
+        // 第一笔之后 Redis 里有了值 → 第二笔走 ACCUMULATE
+        when(stockPredeductService.queryAvailable(7L, 7L)).thenReturn(new BigDecimal("100"));
+        stockService.inbound(buildInboundReqVO(7L, 7L, "50.0000", "第二笔"));
+
+        // 两次调用：第 1 次 RESET(100)、第 2 次 ACCUMULATE(50)
+        ArgumentCaptor<StockPredeductService.InitMode> modeCaptor =
+                ArgumentCaptor.forClass(StockPredeductService.InitMode.class);
+        ArgumentCaptor<BigDecimal> qtyCaptor = ArgumentCaptor.forClass(BigDecimal.class);
+        verify(stockPredeductService, times(2))
+                .initAvailable(eq(7L), eq(7L), qtyCaptor.capture(), modeCaptor.capture());
+
+        assertEquals(List.of(StockPredeductService.InitMode.RESET, StockPredeductService.InitMode.ACCUMULATE),
+                modeCaptor.getAllValues(), "第一笔 RESET、第二笔 ACCUMULATE");
+        assertEquals(0, new BigDecimal("100").compareTo(qtyCaptor.getAllValues().get(0)));
+        assertEquals(0, new BigDecimal("50").compareTo(qtyCaptor.getAllValues().get(1)),
+                "ACCUMULATE 传的必须是**本次增量**，不是累计余额");
+    }
+
+    /**
+     * **顺序的硬证据**：Redis 同步必须在 DB 事务**提交之后**执行
+     *
+     * 构造一个外层事务包住 `inbound`：
+     * - 外层事务提交**之前**，Redis 同步一行都不能跑（否则就是"DB 未提交先写缓存"，
+     *   一旦外层回滚，Redis 里就多出一批不存在的库存 → V2 预扣会放行这笔量 → 超卖）；
+     * - 外层事务提交**之后**，同步必须已执行（用 `verify` 次数 = 1 表达）。
+     *
+     * 若有人把 sync 挪到 `inbound` 方法体最后一行（事务未提交），本用例立刻红。
+     */
+    @Test
+    public void testInbound_redisSync_happensOnlyAfterTransactionCommit() {
+        when(stockPredeductService.queryAvailable(8L, 8L)).thenReturn(null);
+        AtomicInteger callsSeenInsideTransaction = new AtomicInteger();
+        TransactionTemplate outerTx = new TransactionTemplate(transactionManager);
+
+        outerTx.executeWithoutResult(status -> {
+            stockService.inbound(buildInboundReqVO(8L, 8L, "10.0000", "外层事务内"));
+            // 外层事务尚未提交：用 mock 的调用次数快照作为观测点
+            callsSeenInsideTransaction.set(
+                    mockingDetails(stockPredeductService).getInvocations().size());
+        });
+
+        assertEquals(0, callsSeenInsideTransaction.get(),
+                "外层事务提交前不得调用 Redis（否则 DB 回滚会留下「多出的库存」）");
+        // 提交后必然已调用一次（afterCommit 回调里）
+        verify(stockPredeductService, times(1))
+                .initAvailable(eq(8L), eq(8L), any(BigDecimal.class), any(StockPredeductService.InitMode.class));
+    }
+
+    /**
+     * 入库**事务回滚**时不得写 Redis：`afterCommit` 不会触发
+     *
+     * 这与上一条是同一件事的反面：若有人把 sync 改成"方法体最后一行"，
+     * 回滚场景就会写出"DB 没有、Redis 有"的幽灵库存。
+     */
+    @Test
+    public void testInbound_redisSync_skippedWhenTransactionRollsBack() {
+        when(stockPredeductService.queryAvailable(9L, 9L)).thenReturn(null);
+        TransactionTemplate outerTx = new TransactionTemplate(transactionManager);
+
+        outerTx.executeWithoutResult(status -> {
+            stockService.inbound(buildInboundReqVO(9L, 9L, "10.0000", "将被回滚"));
+            status.setRollbackOnly();
+        });
+
+        // DB 已回滚
+        assertNull(materialStockMapper.selectByProjectIdAndMaterialId(9L, 9L), "外层回滚后不得留下库存行");
+        // Redis 一次都没被写
+        verify(stockPredeductService, never())
+                .initAvailable(eq(9L), eq(9L), any(BigDecimal.class), any(StockPredeductService.InitMode.class));
     }
 
     /**

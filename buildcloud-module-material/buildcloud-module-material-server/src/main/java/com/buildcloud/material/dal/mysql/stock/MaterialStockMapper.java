@@ -207,4 +207,50 @@ public interface MaterialStockMapper extends BaseMapperX<MaterialStockDO> {
             + "WHERE id = #{id} AND deleted = 0")
     int increaseAvailableQtyUnderLock(@Param("id") Long id, @Param("quantity") BigDecimal quantity);
 
+    // ========== V2 申领扣减（MQ 消费者，W5-P2） ==========
+
+    /**
+     * **V2 消费者的 DB 真实扣减**：可用量条件更新（防超卖第二道防线，spec §6.1）
+     *
+     * <pre>
+     *   UPDATE bc_material_stock
+     *      SET available_qty = available_qty - #{quantity},
+     *          version       = version + 1,
+     *          update_time   = NOW()
+     *    WHERE project_id = #{projectId} AND material_id = #{materialId}
+     *      AND available_qty >= #{quantity} AND deleted = 0
+     * </pre>
+     *
+     * ========== 与 V1 的 {@link #reduceAvailableQtyUnderLock} 是两套东西，别合并 ==========
+     *
+     * | | V1 行锁扣减 | 本方法（V2 消费者） |
+     * | --- | --- | --- |
+     * | 定位 | 先 `FOR UPDATE` 锁行，再按主键 UPDATE | **不锁行**，直接按 (project_id, material_id) 条件 UPDATE |
+     * | 并发正确性 | 来自行锁（串行化） | 来自 `available_qty >= quantity` 这条 **WHERE 条件** |
+     * | 影响 0 行的含义 | 不该发生（锁内刚校验过） | **Redis 与 DB 已漂移**：Redis 说够，DB 不够 |
+     * | 冲突处理 | 直接报库存不足 | 报错 → 让 MQ 重试 → 超过次数进死信 + 告警（对账 Job 兜底） |
+     *
+     * ========== 为什么 WHERE 用 (project_id, material_id) 而不是主键 id ==========
+     *
+     * 消费者只拿到消息里的 projectId / materialId，**不去反查库存行**：
+     * 「先 SELECT 拿 id → 再 UPDATE」中间会有窗口（行被逻辑删除/重建），而且多一次往返。
+     * 直接把业务唯一键 `uk_project_material` 写进 WHERE，一条语句完成「定位 + 校验 + 扣减」，
+     * 这也是 spec §6.1 步骤④ 原文的语句形状。
+     *
+     * `deleted = 0` 必须自己写（注解 SQL 不走 MyBatis-Plus 逻辑删除拼接）；
+     * `tenant_id` 由多租户插件自动追加（DO extends TenantBaseDO，AGENTS R-8）。
+     *
+     * @param projectId  项目编号
+     * @param materialId 物料编号
+     * @param quantity   扣减数量（正数）
+     * @return 影响行数（1 成功；**0 = 可用量不足或库存行不存在/已删除**，调用方必须按故障处理）
+     */
+    @Update("UPDATE bc_material_stock SET available_qty = available_qty - #{quantity}, "
+            + "version = version + 1, update_time = NOW() "
+            + "WHERE project_id = #{projectId} AND material_id = #{materialId} "
+            + "AND available_qty >= #{quantity} AND deleted = 0")
+    int reduceAvailableQtyByBusinessKey(@Param("projectId") Long projectId,
+                                        @Param("materialId") Long materialId,
+                                        @Param("quantity") BigDecimal quantity);
+
 }

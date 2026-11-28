@@ -254,4 +254,42 @@ public interface ErrorCodeConstants {
     ErrorCode STOCK_PREDEDUCT_ROLLBACK_CONFLICT = new ErrorCode(1_102_080_002,
             "预扣回滚失败：申领单 {} 的账目与 Redis 不一致（{}），需人工核对");
 
+    /**
+     * 预扣时 Redis 可用量未初始化，且从 DB 回填也失败（库存行不存在）
+     *
+     * V2 的预扣依赖 `pm:stock:{projectId}:{materialId}` 存在（由入库时的
+     * {@code StockPredeductService#initAvailable} 建立）。缓存在以下场景会缺：
+     * Redis 重启/被清、项目首次申领（历史库存是 V1 时期入库的）、对账 Job 修复过程中。
+     *
+     * 这时**不能**直接把「未初始化」当「库存不足」返回给用户（用户会误以为没库存去改数量，
+     * 而实际原因是我们缓存没准备好）——正确做法是从 DB `available_qty` 回填基线后重试一次。
+     * 只有在 DB 里连库存行都没有时（该项目从未入过此物料）才报本错误码，
+     * 语义是"业务前置缺失"，与"库存不足"（STOCK_NOT_ENOUGH）、"系统故障"都不同。
+     */
+    ErrorCode STOCK_PREDEDUCT_BASELINE_MISSING = new ErrorCode(1_102_080_003,
+            "库存尚未初始化，无法预扣（项目 {}，物料 {}）：该项目没有该物料的库存记录");
+
+    // ========== V2 事务消息 / 幂等消费 1-102-090-000（W5-P2，spec §6.1 步骤④） ==========
+    /**
+     * 事务消息发送失败（提交申领的回滚信号）
+     *
+     * 触发点：half 消息没发到 Broker（Namesrv 不可达/Broker 拒绝），或本地事务回滚。
+     * 此时 V2 处理器已经**回滚 Redis 预扣**并把单据退回草稿，用户看到的应是
+     * "提交失败，请重试"，而不是"提交成功"。必须显式报错：静默成功会让用户以为单子提交了。
+     */
+    ErrorCode REQUISITION_SUBMIT_MQ_FAILED = new ErrorCode(1_102_090_000,
+            "申领单 {} 提交失败（扣减消息发送异常），库存预扣已回滚，请稍后重试");
+
+    /**
+     * DB 兜底防线触发：Redis 预扣成功但 DB 条件扣减影响 0 行
+     *
+     * 这是「防超卖三道防线」第二道的告警码（spec §6.1）。含义是 **Redis 与 DB 已漂移**：
+     * Redis 认为可用量足够，而 DB 的 `available_qty >= qty` 不成立。消费者据此抛错让 MQ 重试，
+     * 超过次数进死信，由对账 Job（P4）人工/自动修复。
+     *
+     * 之所以要有错误码而不只是日志：死信里的消息、对账报表、告警短信都需要一个稳定的机读标识。
+     */
+    ErrorCode STOCK_DEDUCT_DRIFT_DETECTED = new ErrorCode(1_102_090_001,
+            "库存扣减失败：Redis 与 DB 可用量不一致（申领单 {}，项目 {}，物料 {}，数量 {}）");
+
 }
