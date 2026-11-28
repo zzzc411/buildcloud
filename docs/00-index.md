@@ -76,7 +76,7 @@ docs/
 | `plans/plan-w1-infra-up.md` | 2026-11-24 | 已完成 | W1：环境与基座跑通（P1/P2/P3 全绿，tag `w1`，2026-11-25） |
 | `plans/plan-w2-repo-skeleton.md` | 2026-11-24 | 已完成 | W2：基座裁剪 + 4 模块骨架 + 生成器四件套（P1-P4 全绿，tag `w2`） |
 | `plans/plan-w3-project-contract.md` | 2026-11-24 | 已完成 | W3：项目域 + 合同域 + 立项/进度款审批（P1-P5 全绿，tag `w3`） |
-| `plans/plan-w4-material-v1.md` | 2026-11-24 | 进行中 | W4：材料域 V1 同步链路 + 申领审批闭环（P1/P2/P3 ✅） |
+| `plans/plan-w4-material-v1.md` | 2026-11-24 | 进行中 | W4：材料域 V1 同步链路 + 申领审批闭环（P1-P5 ✅） |
 | `plans/plan-w5-concurrent-v2.md` | 2026-11-24 | 未开始 | W5：高并发改造 V2（Lua/事务消息/延迟关单/对账/缓存） |
 | `plans/plan-w6-consistency-report.md` | 2026-11-24 | 未开始 | W6：Seata + 分库分表 + 异步报表 + 首轮压测 |
 | `plans/plan-w7-ai-rag.md` | 2026-11-24 | 未开始 | W7：AI 模块（RAG/SSE/引用溯源/LLM 动态配置） |
