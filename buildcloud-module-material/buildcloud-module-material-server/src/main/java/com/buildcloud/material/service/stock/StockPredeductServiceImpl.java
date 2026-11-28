@@ -220,11 +220,13 @@ public class StockPredeductServiceImpl implements StockPredeductService {
         }
         if (result == StockRollbackResult.NEED_INIT || result == StockRollbackResult.QTY_MISMATCH) {
             // 这两种都是"账目对不上"，脚本已拒绝改动。不能静默返回——否则库存差异无人知晓。
+            // 抛异常让调用方整体回滚；异常里带上原始结果，调用方（统一回滚组件）据此在日志/告警里区分。
+            // 本方法的契约因此是：**只返回 ROLLED_BACK / NOT_FOUND**，另两种一律抛
+            // STOCK_PREDEDUCT_ROLLBACK_CONFLICT（见接口 Javadoc 与单测）。
             log.error("[rollback][回滚被脚本拒绝 reqNo={} projectId={} materialId={} qty={} result={}]",
                     reqNo, projectId, materialId, qty, result);
             throw exception(STOCK_PREDEDUCT_ROLLBACK_CONFLICT, reqNo, result.getDesc());
-        }
-        log.info("[rollback][回滚结果 reqNo={} projectId={} materialId={} qty={} result={}]",
+        }        log.info("[rollback][回滚结果 reqNo={} projectId={} materialId={} qty={} result={}]",
                 reqNo, projectId, materialId, qty, result);
         return result;    }
 

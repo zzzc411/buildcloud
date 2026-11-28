@@ -21,11 +21,15 @@ import com.buildcloud.material.enums.requisition.RequisitionStatusEnum;
 import com.buildcloud.material.enums.stock.StockBizTypeEnum;
 import com.buildcloud.material.service.requisition.mq.RequisitionDeductLocalTransactionService;
 import com.buildcloud.material.service.requisition.mq.RequisitionDeductMessageProducer;
+import com.buildcloud.material.service.requisition.mq.RequisitionTimeoutMessageProducer;
 import com.buildcloud.material.service.requisition.strategy.RequisitionSubmitHandlerFactory;
 import com.buildcloud.material.service.requisition.strategy.RequisitionV1SubmitHandler;
 import com.buildcloud.material.service.requisition.strategy.RequisitionV2SubmitHandler;
 import com.buildcloud.material.service.stock.StockPredeductService;
+import com.buildcloud.material.service.stock.StockRollbackServiceImpl;
+import com.buildcloud.material.service.stock.redis.StockRollbackResult;
 import jakarta.annotation.Resource;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
@@ -81,7 +85,7 @@ import static org.mockito.Mockito.when;
  */
 @Import({RequisitionApprovalServiceImpl.class, RequisitionServiceImpl.class,
         RequisitionV1SubmitHandler.class, RequisitionV2SubmitHandler.class,
-        RequisitionSubmitHandlerFactory.class})
+        RequisitionSubmitHandlerFactory.class, StockRollbackServiceImpl.class})
 @Sql(scripts = "/sql/requisition-test-tables.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 public class RequisitionP6BlindSpotTest extends BaseDbUnitTest {
 
@@ -124,6 +128,29 @@ public class RequisitionP6BlindSpotTest extends BaseDbUnitTest {
 
     @MockBean
     private RequisitionDeductLocalTransactionService requisitionDeductLocalTransactionService;
+
+    /**
+     * W5-P3 起 {@code RequisitionApprovalServiceImpl#submitApproval} 末尾会发一条超时关单延迟消息。
+     * 本类不关心 MQ，用 `@MockBean` 占位（默认返回 false = 未发送，只打 error 日志，不影响提交结果）。
+     */
+    @MockBean
+    private RequisitionTimeoutMessageProducer timeoutMessageProducer;
+
+    /**
+     * W5-P3 起「驳回 / 取消 / 超时关单」的 DB 回补由统一回滚组件完成，组件会**无条件**调用
+     * {@code StockPredeductService#rollback} 还原 Redis 预扣（明细不存在 = NOT_FOUND，无副作用）。
+     *
+     * 本类的 `@MockBean` 替身默认对 `rollback(...)` 返回 `null`——而组件的"是否结算清楚"判断
+     * 依赖它的枚举值。这里给替身补一个与真实现一致的默认应答：NOT_FOUND（没有预扣过），
+     * 与 P5 类里"不涉及 Redis"的前提保持一致。**真正的 Redis 语义**由
+     * {@code RequisitionTimeoutCloseServiceTest}（替身按语义应答）与
+     * {@code StockRollbackServiceIntegrationTest}（连真 Redis）覆盖。
+     */
+    @BeforeEach
+    public void stubRedisRollbackDefault() {
+        when(stockPredeductService.rollback(any(), any(), any(), any()))
+                .thenReturn(StockRollbackResult.NOT_FOUND);
+    }
 
     // =================================================================================
     // 盲点 1：退料多次 —— 第一次退 20、再退 30（任务书指定数字）

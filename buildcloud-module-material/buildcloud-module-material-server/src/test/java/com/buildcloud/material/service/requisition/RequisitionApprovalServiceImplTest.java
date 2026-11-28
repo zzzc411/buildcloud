@@ -25,11 +25,17 @@ import com.buildcloud.material.service.requisition.mq.RequisitionDeductMessagePr
 import com.buildcloud.material.service.requisition.strategy.RequisitionSubmitHandlerFactory;
 import com.buildcloud.material.service.requisition.strategy.RequisitionV1SubmitHandler;
 import com.buildcloud.material.service.requisition.strategy.RequisitionV2SubmitHandler;
+import com.buildcloud.material.service.requisition.mq.RequisitionTimeoutMessage;
+import com.buildcloud.material.service.requisition.mq.RequisitionTimeoutMessageProducer;
 import com.buildcloud.material.service.stock.StockPredeductService;
+import com.buildcloud.material.service.stock.StockRollbackService;
+import com.buildcloud.material.service.stock.StockRollbackServiceImpl;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.jdbc.Sql;
 
@@ -63,6 +69,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -104,7 +111,7 @@ import static org.mockito.Mockito.when;
  */
 @Import({RequisitionApprovalServiceImpl.class, RequisitionServiceImpl.class,
         RequisitionV1SubmitHandler.class, RequisitionV2SubmitHandler.class,
-        RequisitionSubmitHandlerFactory.class})
+        RequisitionSubmitHandlerFactory.class, StockRollbackServiceImpl.class})
 @Sql(scripts = "/sql/requisition-test-tables.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 public class RequisitionApprovalServiceImplTest extends BaseDbUnitTest {
 
@@ -150,6 +157,24 @@ public class RequisitionApprovalServiceImplTest extends BaseDbUnitTest {
 
     @MockBean
     private RequisitionDeductLocalTransactionService requisitionDeductLocalTransactionService;
+
+    /**
+     * **统一回滚组件的 Spy**（W5-P3 起驳回分支改为调用它）
+     *
+     * 用 Spy 而不是 Mock：既要走真实回补逻辑（本类的断言看的是库存与流水的实际结果），
+     * 又要能 `verify` "驳回路径确实调了统一组件的同一个方法"（任务书：驳回与超时共用一条代码路径）。
+     */
+    @SpyBean
+    private StockRollbackServiceImpl stockRollbackService;
+
+    /**
+     * 超时关单延迟消息发送器（W5-P3 起 {@code submitApproval} 末尾会发一条延迟消息）
+     *
+     * 本类不关心 MQ：用 @MockBean 占位（默认返回 false = 未发送，只会打一条 error 日志，
+     * 不影响提交结果——这正是"提醒失败不回滚业务"的设计）。
+     */
+    @MockBean
+    private RequisitionTimeoutMessageProducer timeoutMessageProducer;
 
     // ========== 一、提交审批：扣库存 + 发起流程 ==========
 
@@ -317,6 +342,50 @@ public class RequisitionApprovalServiceImplTest extends BaseDbUnitTest {
                 REQUISITION_NOT_EXISTS);
     }
 
+    @Test
+    public void testSubmitApproval_sendsTimeoutCloseDelayMessage() {
+        // W5-P3：提交审批后必须发一条"30 分钟后到期去关单"的延迟消息，且消息体带上单据 id/单号/项目/超时时间
+        insertStock(1L, 1L, "100.0000");
+        Long id = requisitionService.createRequisition(buildCreateReqVO(1L, item(1L, "30.0000")));
+        String inst = PROCESS_KEY_REQUISITION_APPROVE + ":1:inst-delay";
+        when(processInstanceApi.createProcessInstance(any(), any(BpmProcessInstanceCreateReqDTO.class)))
+                .thenReturn(CommonResult.success(inst));
+        when(timeoutMessageProducer.send(any(RequisitionTimeoutMessage.class))).thenReturn(true);
+
+        approvalService.submitApproval(id, List.of(1L, 2L));
+
+        ArgumentCaptor<RequisitionTimeoutMessage> captor = ArgumentCaptor.forClass(RequisitionTimeoutMessage.class);
+        verify(timeoutMessageProducer, times(1)).send(captor.capture());
+        RequisitionTimeoutMessage message = captor.getValue();
+        assertEquals(id, message.getRequisitionId(), "消息必须带单据 id（消费者据此定位，比按单号查快且不会串）");
+        RequisitionDO db = requisitionMapper.selectById(id);
+        assertEquals(db.getReqNo(), message.getReqNo(), "消息里的单号必须与库一致");
+        assertEquals(1L, message.getProjectId());
+        assertNotNull(message.getTimeoutTime(), "消息必须带提交时写入的超时时间（消费者做二次核对）");
+        // 与库里的 timeout_time 一致（同一次计算复用，见 submitApproval 的 L3-10 注释）
+        assertTrue(Duration.between(db.getTimeoutTime(), message.getTimeoutTime()).abs().toMillis() < 1,
+                "消息里的 timeoutTime 必须与库值一致（容差 1 毫秒）");
+    }
+
+    @Test
+    public void testSubmitApproval_delayMessageSendFails_submitStillSucceeds() {
+        // 提醒发不出去**不能**让提交失败：单据已提交、库存已扣、流程已发起。
+        // 漏关单是"少卖方向"（单据停在待审批），比"提交失败"可接受；兜底靠 timeout_time 扫描。
+        insertStock(1L, 1L, "100.0000");
+        Long id = requisitionService.createRequisition(buildCreateReqVO(1L, item(1L, "30.0000")));
+        when(processInstanceApi.createProcessInstance(any(), any(BpmProcessInstanceCreateReqDTO.class)))
+                .thenReturn(CommonResult.success(PROCESS_KEY_REQUISITION_APPROVE + ":1:inst-fail"));
+        when(timeoutMessageProducer.send(any(RequisitionTimeoutMessage.class))).thenReturn(false);
+
+        String inst = approvalService.submitApproval(id, List.of(1L));
+
+        assertNotNull(inst, "消息发送失败不应影响提交结果（返回流程实例号照旧）");
+        RequisitionDO db = requisitionMapper.selectById(id);
+        assertEquals(RequisitionStatusEnum.SUBMITTED.getStatus(), db.getStatus());
+        assertEquals(RequisitionApprovalStatusEnum.RUNNING.getStatus(), db.getApprovalStatus());
+        assertQty("70", stockOf(1L, 1L).getAvailableQty(), "扣减仍然生效（提交是成功的事务）");
+    }
+
     // ========== 二、审批通过：状态 1→2，**库存与流水完全不变**（最易错点） ==========
 
     @Test
@@ -406,6 +475,37 @@ public class RequisitionApprovalServiceImplTest extends BaseDbUnitTest {
     }
 
     // ========== 三、审批驳回：状态 1→9，**库存回补** + biz_type=4 冲正流水 ==========
+
+    /**
+     * **驳回路径必须调用统一回滚组件**（W5-P3 任务书的硬指标：驳回与超时共用一条代码路径）
+     *
+     * 断言方式：对 {@link StockRollbackServiceImpl} 用 `@SpyBean`（走真实逻辑）后 `verify`
+     * 「本类的驳回分支调用的是组件上的 {@code rollbackForRequisition}，且原因参数是"审批未通过"」。
+     * 同一断言在超时关单侧由 {@code RequisitionTimeoutCloseServiceTest} 做（原因参数是"超时关单"）——
+     * 两边指的**同一个 Spring bean 的同一个方法**，这就是"代码路径唯一"的可执行证据。
+     */
+    @Test
+    public void testHandleApprovalResult_reject_callsUnifiedRollbackComponent() {
+        insertStock(1L, 1L, "100.0000");
+        Long id = requisitionService.createRequisition(buildCreateReqVO(1L, item(1L, "30.0000")));
+        String inst = prepareSubmittedApproval(id, List.of(1L, 2L));
+
+        approvalService.handleApprovalResult(id, inst, BpmProcessInstanceStatusEnum.REJECT.getStatus(), "料号不对");
+
+        // 断言 1：确实调了统一组件（且只调用一次）
+        ArgumentCaptor<RequisitionDO> requisitionCaptor = ArgumentCaptor.forClass(RequisitionDO.class);
+        verify(stockRollbackService, times(1))
+                .rollbackForRequisition(requisitionCaptor.capture(), any(), ArgumentMatchers.eq("审批未通过"));
+        assertEquals(id, requisitionCaptor.getValue().getId(), "组件必须收到本张单据（而不是别的单）");
+
+        // 断言 2：业务结果与"自己拼回补逻辑"完全一致——库存回补 + 一条冲正流水 + 状态 9
+        assertQty("100", stockOf(1L, 1L).getAvailableQty());
+        assertEquals(RequisitionStatusEnum.CANCELED.getStatus(), requisitionMapper.selectById(id).getStatus());
+        assertEquals(1L, stockLogMapper.selectCountByBizNoAndType(1L, 1L,
+                requisitionMapper.selectById(id).getReqNo(), StockBizTypeEnum.REVERSAL.getBizType()));
+
+        System.out.printf("[统一组件证据-驳回] 组件调用次数=1 原因=审批未通过 单据=%d%n", id);
+    }
 
     @Test
     public void testHandleApprovalResult_reject_restoreStockAndReversalLog() {

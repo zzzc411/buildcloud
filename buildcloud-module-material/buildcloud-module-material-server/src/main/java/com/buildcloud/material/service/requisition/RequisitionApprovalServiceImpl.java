@@ -20,7 +20,10 @@ import com.buildcloud.material.dal.mysql.stock.StockLogMapper;
 import com.buildcloud.material.enums.requisition.RequisitionApprovalStatusEnum;
 import com.buildcloud.material.enums.requisition.RequisitionStatusEnum;
 import com.buildcloud.material.enums.stock.StockBizTypeEnum;
+import com.buildcloud.material.service.requisition.mq.RequisitionTimeoutMessageProducer;
 import com.buildcloud.material.service.requisition.strategy.RequisitionV1SubmitHandler;
+import com.buildcloud.material.service.stock.StockRollbackService;
+import com.buildcloud.material.service.stock.redis.RequisitionRollbackResult;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -154,6 +157,26 @@ public class RequisitionApprovalServiceImpl implements RequisitionApprovalServic
     private RequisitionV1SubmitHandler v1SubmitHandler;
 
     /**
+     * **统一回滚组件**（W5-P3）：驳回 / 超时关单共用的回补实现
+     *
+     * 本类的驳回分支只调用它，不再自己拼「读明细 → 锁行 → 回补 → 写冲正流水」。
+     * 组件内部复用 V1 的行锁回补（V1 代码零改动），所以"回补 + 冲正"从此只有组件这一个入口，
+     * 驳回与超时两条路径的等价性由 `RequisitionApprovalServiceImplTest` 与
+     * `RequisitionTimeoutCloseServiceTest` 各自 `verify` 到**同一个 bean 的同一个方法**钉住。
+     */
+    @Resource
+    private StockRollbackService stockRollbackService;
+
+    /**
+     * 超时关单延迟消息发送器（W5-P3）
+     *
+     * 注入接口而非 {@code RocketMQTemplate}：单测要把"发成功/发失败"变成可控输入，
+     * 而 {@code RocketMQTemplate} 需要完整的 Broker 上下文。
+     */
+    @Resource
+    private RequisitionTimeoutMessageProducer timeoutMessageProducer;
+
+    /**
      * 基座 BPM 流程实例 RPC（bpm-server，@FeignClient(name="bpm-server")）
      */
     @Resource
@@ -229,9 +252,40 @@ public class RequisitionApprovalServiceImpl implements RequisitionApprovalServic
         requisitionMapper.updateProcessInstanceIdIfAbsent(requisitionId, processInstanceId);
         requisition.setProcessInstanceId(processInstanceId);
 
-        log.info("[submitApproval][申领单({}) 发起会签审批成功，processInstanceId={}, approvers={}, itemCount={}, userId={}]",
-                requisitionId, processInstanceId, approversText, items.size(), userId);
+        // 6. **发超时关单延迟消息**（W5-P3，spec §6.1 步骤⑥：30 分钟后到期，未审完则关闭 + 回滚）
+        //    为什么放在"实例号已回写"之后：消息是"提醒未来去关单"，只有在单据真的处于
+        //    「已提交(1) + 审批中(1) + 有实例号」的状态下它才有意义（消费者还会再核对一次状态与超时时间）。
+        //    为什么失败**不抛**：提交本身已经成功（预扣 + 状态 + 流程实例都落了），
+        //    因一条提醒失败而回滚整笔业务是本末倒置；漏发的后果是"这张单不会自动关"（保守方向，
+        //    单据停在待审批，由人处理），且 timeout_time 列本身就是兜底扫描的依据（见消费者类注释）。
+        //    注意：**必须在事务内发送**——若事务提交失败，消息会先于数据存在，消费者按 id 查不到单据只会
+        //    打 error 后丢弃（幂等容错，不会误关）。这一取舍已在 docs/plans/plan-w5 的进度日志里记录。
+        boolean timeoutMessageSent = sendTimeoutCloseMessage(requisition);
+
+        log.info("[submitApproval][申领单({}) 发起会签审批成功，processInstanceId={}, approvers={}, itemCount={}, "
+                        + "userId={}, timeoutTime={}, timeoutMessageSent={}]",
+                requisitionId, processInstanceId, approversText, items.size(), userId,
+                timeoutTime, timeoutMessageSent);
         return processInstanceId;
+    }
+
+    /**
+     * 发送超时关单延迟消息（失败只记日志，不影响提交结果）
+     *
+     * @param requisition 申领单（须已有 id / reqNo / projectId / timeoutTime）
+     * @return 是否发送成功（供日志与单测断言）
+     */
+    private boolean sendTimeoutCloseMessage(RequisitionDO requisition) {
+        try {
+            return timeoutMessageProducer.send(RequisitionTimeoutMessageProducer.buildMessage(
+                    requisition.getId(), requisition.getReqNo(), requisition.getProjectId(),
+                    requisition.getTimeoutTime()));
+        } catch (Exception e) {
+            // 生产者本身已把异常收敛成 false；这里再兜一层，保证"提醒失败"永远不会掀翻提交事务
+            log.error("[sendTimeoutCloseMessage][超时关单消息发送异常，单据仍需人工审批 reqNo={}]",
+                    requisition.getReqNo(), e);
+            return false;
+        }
     }
 
     // ========== 查询审批状态 ==========
@@ -355,6 +409,19 @@ public class RequisitionApprovalServiceImpl implements RequisitionApprovalServic
      * 而库存在提交审批时就已扣掉——不回补就是「料已经扣、单却作废」，库存永久少一块。
      * 业务状态统一落 9(已取消)（状态机 1→9 是既有合法边），审批状态按回调原值区分 3/4，
      * 这样报表既能按业务状态统计，也能看出是"审批驳回"还是"主动撤回"。
+     *
+     * ========== W5-P3：回补动作改为调用**统一回滚组件**（本类不再自己拼回补逻辑） ==========
+     *
+     * 「审批驳回」与「超时关单」（{@code RequisitionTimeoutCloseService}）的库存事实完全相同：
+     * 提交时已扣、现在要还、都要写一条 biz_type=4 冲正流水。若各写一份，必然分叉
+     * （W5-P2 的 V2 cancel 就曾只还了 Redis、没回补 DB）。因此两者统一走
+     * {@code StockRollbackService#rollbackForRequisition}——**同一个 Spring bean、同一个方法**，
+     * 双边的单测各自用 Mockito `verify` 钉住"调到了它"（驳回侧见
+     * {@code testHandleApprovalResult_reject_callsUnifiedRollbackComponent}，
+     * 超时侧见 {@code testClose_submitted_closedWithRestore}）。
+     *
+     * 组件内部仍复用 V1 的行锁回补实现（`SELECT ... FOR UPDATE` → `available_qty += qty` → 冲正流水），
+     * 所以 V1 代码一行未改，"回补 + 冲正"从此只有组件这一个入口。
      */
     private void handleRejected(RequisitionDO requisition, Integer target, String reason) {
         // ========== 幂等 3/3：CAS 主闸门（必须在回补库存之前执行） ==========
@@ -369,22 +436,23 @@ public class RequisitionApprovalServiceImpl implements RequisitionApprovalServic
             return;
         }
 
-        // 回补库存 + 写冲正流水（biz_type=4，quantity 正数）
-        List<RequisitionItemDO> items = requisitionItemMapper.selectListByRequisitionId(requisition.getId());
-        if (CollUtil.isEmpty(items)) {
-            // 明细被删空的单据理论上不存在（建单就落库）。此处抛错回滚：没有"该退多少"的依据时
-            // 静默跳过 = 「单据已取消但库存永久少一块」且无人知晓，是最难查的一类账不平。
-            throw exception(REQUISITION_ITEM_EMPTY);
+        // 回补库存 + 写冲正流水（biz_type=4，quantity 正数）——统一回滚组件，
+        // 与超时关单是同一条代码路径（内部按 materialId 升序锁行 + 写冲正流水）
+        RequisitionRollbackResult rollbackResult = stockRollbackService.rollbackForRequisition(
+                requisition, null, "审批未通过");
+        if (!rollbackResult.isAcquired()) {
+            // 回补不彻底 → 抛错整体回滚（含上面的 CAS），单据回到审批中。
+            // 静默提交会留下"单据已取消、库存还有一部分没还"的账不平，且很难与别的问题区分。
+            throw new IllegalStateException(String.format(
+                    "审批驳回回滚不彻底：reqNo=%s requisitionId=%s result=%s",
+                    requisition.getReqNo(), requisition.getId(), rollbackResult));
         }
-        // 复用 V1 的回补逻辑（按 materialId 升序锁行 + available_qty += qty + biz_type=4 流水），
-        // 与「人点取消」是同一段代码——只是触发者从人换成了审批回调。
-        v1SubmitHandler.cancel(requisition, items);
 
         requisition.setStatus(RequisitionStatusEnum.CANCELED.getStatus());
         requisition.setApprovalStatus(target);
         log.info("[handleApprovalResult][申领单({}) 审批未通过：已提交(1)→已取消(9)，"
-                        + "已回补库存并写 biz_type=4 冲正流水，itemCount={}, approvalStatus={}, reason={}]",
-                requisition.getId(), items.size(), target, reason);
+                        + "已回补库存并写 biz_type=4 冲正流水，approvalStatus={}, reason={}, rollback={}]",
+                requisition.getId(), target, reason, rollbackResult);
     }
 
     // ========== 出库 ==========

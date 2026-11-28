@@ -15,7 +15,7 @@ spring:
     # 队列稍长就会抛 `Timeout trying to lock table`，表现为「随机红」而非业务失败，
     # 很难与真正的缺陷区分。抬高上限后，锁仍然是行级、仍然串行，只是不会因等待被误判成错误。
     # 对 P2/P3 的用例无副作用（它们没有超过 1 秒的持锁场景）。
-    url: jdbc:h2:mem:testdb;MODE=MYSQL;DATABASE_TO_UPPER=false;NON_KEYWORDS=value;LOCK_TIMEOUT=10000; # MODE 使用 MySQL 模式；DATABASE_TO_UPPER 配置表和字段使用小写
+    url: jdbc:h2:mem:testdb;MODE=MySQL;DATABASE_TO_UPPER=false;NON_KEYWORDS=value;LOCK_TIMEOUT=10000; # MODE 使用 MySQL 模式；DATABASE_TO_UPPER 配置表和字段使用小写
     driver-class-name: org.h2.Driver
     username: sa
     password:

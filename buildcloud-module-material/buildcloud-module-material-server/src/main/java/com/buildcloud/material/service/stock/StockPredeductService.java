@@ -84,14 +84,25 @@ public interface StockPredeductService {
     /**
      * 回滚预扣（驳回 / 超时关单 / 本地事务失败时调用）
      *
-     * 语义：明细存在 → INCRBY 还原 + HDEL 明细；明细不存在 → 无副作用返回 NOT_FOUND。
-     * 数量以**明细里记录的值**为准做一致性校验（不信任入参），不一致时拒绝改动。
+     * 语义：明细存在 → INCRBY 还原 + HDEL 明细；明细不存在 → 无副作用返回 {@link StockRollbackResult#NOT_FOUND}。
+     * 数量以**明细里记录的值**为准做一致性校验（不信任入参）。
+     *
+     * ========== 返回契约（W5-P3 复核时补明确，避免调用方写出永远走不到的分支） ==========
+     *
+     * 本方法**只返回两种结果**：
+     * - {@link StockRollbackResult#ROLLED_BACK}：确实还原了一笔预扣；
+     * - {@link StockRollbackResult#NOT_FOUND}：没有这笔预扣 → **无副作用**（驳回/关单与对账并发时的正常结果）。
+     *
+     * 另外两种（{@link StockRollbackResult#NEED_INIT} / {@link StockRollbackResult#QTY_MISMATCH}）是
+     * "账目对不上、脚本拒绝改动"，直接抛 {@code STOCK_PREDEDUCT_ROLLBACK_CONFLICT}（1-102-080-002），
+     * **不会**作为返回值出现——静默返回会让调用方以为是"已处理"，而库存其实没还。
      *
      * @param reqNo      申领单号
      * @param projectId  项目编号
      * @param materialId 物料编号
-     * @param qty        期望数量（与预扣时一致；不一致返回 QTY_MISMATCH）
-     * @return 回滚结果
+     * @param qty        期望数量（与预扣时一致；不一致会被拒绝并抛错）
+     * @return 回滚结果（ROLLED_BACK / NOT_FOUND；其余情况抛业务异常）
+     * @throws cn.iocoder.yudao.framework.common.exception.ServiceException 明细与脚本对不上时（NEED_INIT / QTY_MISMATCH）
      */
     StockRollbackResult rollback(String reqNo, Long projectId, Long materialId, BigDecimal qty);
 

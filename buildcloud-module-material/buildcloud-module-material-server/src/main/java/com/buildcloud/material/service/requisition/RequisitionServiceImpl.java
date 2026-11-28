@@ -262,6 +262,19 @@ public class RequisitionServiceImpl implements RequisitionService {
             // 只能报错回滚，交由人工核对。静默跳过 = 账永久不平。
             throw exception(REQUISITION_ITEM_EMPTY);
         }
+        // **取消路径的 DB 回补仍由 handler 负责**（V1：行锁回补 + biz_type=4 流水；V2：Redis 预扣还原）。
+        //
+        // ===== 为什么 W5-P3 没有把「取消」也并进统一回滚组件（决策留痕，别随手改） =====
+        //
+        // 1. 状态 CAS（2→9 / 1→9）已经保证"这次是我处理的"，取消是**人点一次一个事务**，
+        //    不存在"同一套回补被重复触发"的场景；而组件的行级判据正是为驳回回调重投 /
+        //    超时消息重投这类重复触发准备的（见 StockRollbackService 的类注释）。
+        // 2. 更硬的一条：`handler.cancel` 的契约同时包含「DB 回补」与「Redis 回滚」两件事，
+        //    若组件再接管 DB 回补，V1 的 DB 回补就会执行两遍（实测库存被补到 130）。
+        //    收敛方案（把 V1 handler 的 cancel 拆成"只回滚 Redis"）会改动 V1 语义，
+        //    按 AGENTS 需先与主控确认。
+        // 本 Phase 的验收范围是 spec §6.1 步骤⑤⑥（审批驳回 + 超时关单），**不含取消**，
+        // 故取消路径保持 W4 行为（本文件此处零改动）。
         submitHandlerFactory.getHandler().cancel(requisition, items);
 
         // 6. 同步内存态再返回 —— CAS 只在库里改了 status/approval_status，

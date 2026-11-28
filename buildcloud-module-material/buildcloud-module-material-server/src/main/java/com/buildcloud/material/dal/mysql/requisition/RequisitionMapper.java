@@ -283,4 +283,42 @@ public interface RequisitionMapper extends BaseMapperX<RequisitionDO> {
             + "WHERE id = #{id} AND status = 1 AND deleted = 0")
     int deductCas(@Param("id") Long id);
 
+    // ========== V2 超时关单（延迟消息消费者，W5-P3） ==========
+
+    /**
+     * **超时关单 CAS**：已提交(1) + 审批中(1) → 已关闭(8) + 审批状态置终态
+     *
+     * <pre>
+     *   UPDATE bc_requisition
+     *      SET status = 8, approval_status = #{toApprovalStatus}, update_time = NOW()
+     *    WHERE id = #{id} AND status = 1 AND approval_status = 1 AND deleted = 0
+     * </pre>
+     *
+     * ========== 为什么这是超时关单的**主闸门** ==========
+     *
+     * 延迟消息是"至少一次"投递的（Broker 秒级扫描 + 消费失败重投 + 手工补发）。若不 CAS，
+     * 同一条消息两次投递就会回补两次库存 —— 库存凭空多出，且对账只能事后发现。
+     * 把「判断 + 写入」压成一条语句后：第二个投递影响 0 行 → 调用方幂等返回、不做任何库存动作。
+     *
+     * **两个条件都写进 WHERE，缺一不可**：
+     * - `status = 1`：只有审批中的单能关（已扣减/已出库/已完成/已取消/已关闭一律不能关）；
+     * - `approval_status = 1`：只有"确实在审批流里"的单能关。V1 同步链路的单据在事务外
+     *   不会停在 status=1（提交即到 2），若真的出现「status=1 但 approval_status=-1」的脏数据，
+     *   说明它不是被审批流卡住的，关它是一种猜测 → 交给人工。
+     *
+     * ========== 为什么 approval_status 要写成一个参数（置 4 已取消） ==========
+     *
+     * 关单后这张单在审批语义上"撤销了"：保留 1（审批中）会让迟到的审批回调
+     * 继续通过 `finishApprovalCas (WHERE approval_status = 1)` 命中，从而**把已关闭的单推进到已扣减**
+     * ——那是"单已关闭、库存又扣了一次"的事故。置成终态后，迟到回调自然幂等返回
+     * （见 {@code RequisitionTimeoutCloseService} 的类注释末节）。
+     *
+     * @param id               申领单编号
+     * @param toApprovalStatus 目标审批状态（关单用 4 已取消）
+     * @return 影响行数（1 = 本次首次关单成功；0 = 已被处理或不在"已提交+审批中"）
+     */
+    @Update("UPDATE bc_requisition SET status = 8, approval_status = #{toApprovalStatus}, update_time = NOW() "
+            + "WHERE id = #{id} AND status = 1 AND approval_status = 1 AND deleted = 0")
+    int closeTimeoutCas(@Param("id") Long id, @Param("toApprovalStatus") Integer toApprovalStatus);
+
 }

@@ -19,14 +19,18 @@ import com.buildcloud.material.enums.requisition.RequisitionStatusEnum;
 import com.buildcloud.material.enums.stock.StockBizTypeEnum;
 import com.buildcloud.material.service.requisition.mq.RequisitionDeductLocalTransactionService;
 import com.buildcloud.material.service.requisition.mq.RequisitionDeductMessageProducer;
+import com.buildcloud.material.service.requisition.mq.RequisitionTimeoutMessageProducer;
 import com.buildcloud.material.service.requisition.strategy.RequisitionSubmitHandlerFactory;
 import com.buildcloud.material.service.requisition.strategy.RequisitionV1SubmitHandler;
 import com.buildcloud.material.service.requisition.strategy.RequisitionV2SubmitHandler;
 import com.buildcloud.material.service.stock.StockPredeductService;
+import com.buildcloud.material.service.stock.StockRollbackServiceImpl;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.jdbc.Sql;
 
@@ -93,7 +97,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Import({RequisitionServiceImpl.class,
         RequisitionV1SubmitHandler.class,
         RequisitionV2SubmitHandler.class,
-        RequisitionSubmitHandlerFactory.class})
+        RequisitionSubmitHandlerFactory.class, StockRollbackServiceImpl.class})
 @Sql(scripts = "/sql/requisition-test-tables.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 public class RequisitionServiceImplTest extends BaseDbUnitTest {
 
@@ -134,6 +138,22 @@ public class RequisitionServiceImplTest extends BaseDbUnitTest {
 
     @MockBean
     private RequisitionDeductLocalTransactionService requisitionDeductLocalTransactionService;
+
+    /**
+     * W5-P3 说明：取消路径的 DB 回补**没有**接到统一回滚组件上（决策与实测见 plan-w5 进度日志）
+     *
+     * 试过接上来：`cancelRequisition` 先调组件回补 DB，再调 `handler.cancel` —— 而 V1 的
+     * `cancel` 实现本身也做 DB 回补 + 写冲正流水，于是同一张单被补了两遍（本类用例实测到库存 130）。
+     * 收敛方案（把 V1 handler 的 cancel 拆成只回滚 Redis）会改动 V1 语义，按 AGENTS 需先确认，
+     * 因此本 Phase 的回滚组件只服务「审批驳回」与「超时关单」两条同构路径（spec §6.1 步骤⑤⑥），
+     * 取消路径保持 W4 行为。
+     */
+
+    /**
+     * W5-P3 起 `submitApproval` 末尾会发一条超时关单延迟消息。本类不关心 MQ，用 @MockBean 占位。
+     */
+    @MockBean
+    private RequisitionTimeoutMessageProducer timeoutMessageProducer;
 
     /**
      * 每个用例前重置模式为默认 V1

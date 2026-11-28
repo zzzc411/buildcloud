@@ -34,9 +34,9 @@
 | 工作量 | 2d |
 | 任务 | 半消息发送 + 本地事务（创建申领单已提交 + pending 流水）+ commit/rollback 回查；消费者：DB 真实扣减（乐观锁条件更新 `available >= qty`）+ stock_log 落库 + 状态→已扣减；幂等= req_no 唯一索引 + 状态机判断（重复投递直接 ACK）；**消费失败重试与死信**策略 |
 | 交付物 | 事务消息链路 + 幂等消费单测（重复消息/回查/死信三路径） |
-| 验收标准 | [ ] 本地事务失败时 half 消息被丢弃（单测）；[ ] 同一 req_no 重复投递只生效一次（单测）；[ ] 消费后 Redis 预扣明细与 DB 流水对应 |
+| 验收标准 | [x] 本地事务失败时 half 消息被丢弃（单测）；[x] 同一 req_no 重复投递只生效一次（单测）；[x] 消费后 Redis 预扣明细与 DB 流水对应 |
 | 上下文包（必读） | spec §6.1 步骤④、幂等条款、防超卖三道防线；基座 RocketMQ producer/consumer 模式（只读） |
-| 状态 | ☐ |
+| 状态 | ✅ 2026-11-28 完成（56 个 MQ 相关用例全绿；ADR-005 修正 starter-mq 空壳依赖问题） |
 
 ### Phase 3：延迟关单 + 回滚冲正
 
@@ -45,9 +45,9 @@
 | 工作量 | 1.5d |
 | 任务 | 提交时发 RocketMQ 延迟消息（30 分钟）；到期未审完→已关闭 + Lua 恢复库存 + 冲正流水（biz_type=冲正）；审批驳回路径复用同一回滚组件 |
 | 交付物 | 延迟关单 + 统一回滚冲正组件 + 单测 |
-| 验收标准 | [ ] 超时关单后库存恢复且 Redis=DB（单测断言）；[ ] 驳回与超时共用回滚组件（代码路径一致）；[ ] 冲正流水可对账 |
+| 验收标准 | [x] 超时关单后库存恢复且 Redis=DB（单测断言）；[x] 驳回与超时共用回滚组件（代码路径一致）；[x] 冲正流水可对账 |
 | 上下文包（必读） | spec §5.2 状态机、§6.1 步骤⑤⑥；Phase 1/2 产出 |
-| 状态 | ☐ |
+| 状态 | ✅ 2026-11-28 完成（15 例 H2 关单单测 + 43 例审批单测 + 6 例真 Redis 集成 + 1 例真 Broker 延迟级别探针，全绿） |
 
 ### Phase 4：对账 Job（XXL-Job）
 
@@ -108,3 +108,5 @@
 
 - 2026-11-24：计划创建（自 spec §9 W5 / §6.1 / §6.2 拆分；Phase 5 可并行）。
 - 2026-11-28（W5-P1 Lua 原子预扣）：交付 `scripts/lua/stock-prededuct.lua`（预扣：成功1/不足0/需初始化-1/幂等2）、`stock-prededuct-rollback.lua`（回滚：1/0/-1/-2）、`stock-init.lua`（初始化 reset/accumulate）+ `StockPredeductService(Impl)` + `StockCacheKeys` + 3 个 1-102-080-xxx 错误码；**未接入入库与申领链路**（W5-P2 一并接，避免半接入双写不一致），V1 代码零改动、基座零改动。单测：`StockLuaScriptSyncTest` 3 例（两份脚本副本逐字节一致守护 + key 格式 + 返回码钉死，不依赖 Redis），`StockPredeductServiceIntegrationTest` 16 例（**连真 Redis 127.0.0.1:16379**，`@EnabledIf` 探活，实测 run=16 skipped=0）。**并发证据（核心）**：初始 100 / 20 线程各预扣 10 → 成功 10、不足 10、最终 available=0、明细 10 条、明细合计=100（无超卖，证明 Lua 原子性）；同一 reqNo 8 线程并发 → 真扣 1、幂等 7、available=90。模块全量测试 177 例全绿（含既有 158 例无回归），`mvn install` 不带 repackage.skip，jar 143.4MB 且内含三个 lua 脚本，本地 `--spring.profiles.active=local` 启动成功、`/admin-api/buildcloud-material/health` 返回 `code=0`、启动日志 `[init][Lua 预扣脚本加载成功，探活返回 code=-1]`（jar 内脚本真跑通）。Redis 手工 EVAL 八个返回码全部实测（T1..T8 见 worker 汇报），并定位到两条坑：① `RScript.ReturnType` 无 `INTEGER`（用 `LONG`）；② **PowerShell 会把 redis-cli `--eval` 的 KEYS/ARGV 分隔符 `,` 当数组运算符吞掉**，必须写成 `sh -c "redis-cli ... --eval f k1 k2 , a1 a2"` 或改用 `EVAL "$(...)" <numkeys>`。下一步：Phase 2 事务消息 + 幂等消费，并把 `initAvailable` 接入入库流程。
+
+- 2026-11-28（W5-P3 延迟关单 + 回滚冲正）：交付 **延迟消息生产者** `RequisitionTimeoutMessageProducer`（默认固定 **delay level 16 = 30 分钟**，依据是本机 Broker 实测：`mqadmin getBrokerConfig` → `messageDelayLevel 1s 5s 10s 30s 1m 2m 3m 4m 5m 6m 7m 8m 9m 10m 20m 30m 1h 2h`，第 16 项 = 30m；联调可切秒级，见下）、**延迟消费者** `RequisitionTimeoutCloseConsumer`（独立 topic/tag/消费组，CONCURRENTLY，maxReconsumeTimes=3）、**事务承载** `RequisitionTimeoutCloseService`（状态白名单 `status=1` + `timeout_time<=now()` 二次核对 + `closeTimeoutCas`，7 态 `TimeoutCloseOutcome`）、**统一回滚组件** `StockRollbackService(Impl)` + `RequisitionRollbackResult`（RESTORED / SETTLED_AT_REDIS_ONLY / SKIPPED_NO_STOCK_IMPACT / PARTIAL_RESTORED）。**驳回路径已改为调组件**（`handleApprovalResult` 驳回分支不再自己读明细锁行），`submitApproval` 末尾发延迟消息（**失败只记 error、不回滚业务**）。**Redis 与 DB 非事务一致性的处置**：组件的 DB 回补以「本行是否有 biz_type=2 扣减流水」为判据（V2 在途单据只还 Redis、**不写冲正流水**，否则对账多出一笔），且 **Redis 还原放在 DB 回补之前（fail-fast）**——集成测试实测"Redis 拒绝还原时 DB 已补"的中断态后改的。**测试**：`RequisitionTimeoutCloseServiceTest` 15 例（H2 真库，含「Redis==DB」替身断言、不误关已扣减/已完成/已出库/已取消/已关闭/草稿、重复投递 3 次只补一次、单据被改回已提交后靠冲正流水幂等、消息早到不关、多行明细、V2 在途只还 Redis、迟到审批回调不能把已关闭拉回已扣减）；`StockRollbackServiceIntegrationTest` 6 例（**真 Redis**，`@EnabledIf` 探活，实测 `[关单后] DB=100.0000 Redis=100` 等六条证据）；`RequisitionTimeoutDelayLevelIntegrationTest` 1 例（**真 Broker** 探针：level=18 的消息 5 秒内不投递、level=1 的消息 8.7 秒内到达 → 级别表真实生效）；驳回侧新增 `testHandleApprovalResult_reject_callsUnifiedRollbackComponent`（`@SpyBean` + `verify` 证明调的是组件同一个方法）。**全量**：`Tests run: 262, Failures: 0, Errors: 0, Skipped: 0`（含 P1 既有的 16 例 Redis 集成测试，用 `cmd /c "set BC_TEST_REDIS_PASSWORD=...&& mvn ..."` 真连，skip 归零）；`mvn install` 不带 repackage.skip，fat jar 183.5MB 且含 9 个新 class。**取舍留痕**：① 取消路径（`cancelRequisition`）**没有**并入组件——`handler.cancel` 契约里同时含「DB 回补」与「Redis 回滚」，组件再补一遍会导致同单补两次（实测库存补到 130），收敛需改 V1 语义，本 Phase 保持 W4 行为；② 关单后**不**自动终止 bpm 流程实例（需 bpm 新接口，R-2），靠 `approval_status=4` 让迟到回调在 `finishApprovalCas` 上幂等返回。联调：本机无运行中的 buildcloud 服务，material 服务按 `--spring.profiles.active=local` 启动失败于 **AGENTS 已记录的既有问题**（`RocketMQTemplate` bean 缺失，与 P2 一致，非本 Phase 引入），延迟消息的端到端验证改由真 Broker 探针 + 真 Redis 集成测试覆盖。
