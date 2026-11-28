@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  筑云 BuildCloud —— 材料申领审批流程（requisition-approve）BPMN 2.0 流程定义源文件
+
+  用途：由 scripts/bpm-deploy-requisition-approve.ps1 读取并调 bpm-server 的
+        POST /admin-api/bpm/model/create（BPMN 设计器模型）→ POST /admin-api/bpm/model/deploy
+        部署为 Flowable 流程定义。本文件是**单一事实来源**，改流程只改这里再重跑脚本。
+
+  流程结构（spec v1.2 §5.2 状态机 + §5.3「requisition-approve（材料申领，含会签示例）」）：
+    发起（start 事件）
+      → 材料会签审批（userTask id=materialCoSign，**并行多实例会签**，审批人 = 流程变量 approvers）
+          ├─ 全部审批人通过（100%）→ 结束：bpm 判定实例 STATUS=APPROVE → 回调业务方
+          │    → bc_requisition.status 1(已提交/已预扣) → 2(已扣减)，**不再动库存**（提交时已扣）
+          └─ 任一审批人不通过 → 结束：bpm 判定实例 STATUS=REJECT → 回调业务方
+               → status 1 → 9(已取消) + 回补 available_qty + 写 biz_type=4 冲正流水
+
+  ========== 会签（本文件与 payment-approve 的唯一结构差异） ==========
+
+  基座 yudao-cloud 的多人审批**不是**靠 BPMN 的 `collection` 表达式取人，而是：
+  1. `BpmActivityBehaviorFactory#createParallelMultiInstanceBehavior` 把带
+     `<multiInstanceLoopCharacteristics>` 的 userTask 换成 `BpmParallelMultiInstanceBehavior`；
+  2. 该 behavior 的 `resolveNrOfInstances` **忽略** BPMN 里的 collection 表达式
+     （构造函数把 `collectionExpression` 置 null，`collectionVariable` 改写为
+     `<activityId>_assignees`，见 FlowableUtils#formatExecutionCollectionVariable）；
+  3. 审批人由 `BpmTaskCandidateInvoker#calculateUsersByTask` 按节点的候选策略算出来，
+     算得的人数 = 实例数；`BpmUserTaskActivityBehavior` 再从
+     `<activityId>_assignee` 取单个审批人写入 task.assignee。
+
+  因此「会签 2 人」的正确配置是**候选策略给出 2 个人**，而不是写死集合表达式：
+    - flowable:candidateStrategy = 60（BpmTaskCandidateStrategyEnum.EXPRESSION 流程表达式）
+    - flowable:candidateParam    = ${approvers}
+      —— approvers 是业务方发起时传入的流程变量（List<Long> 用户编号），
+         由 RequisitionApprovalServiceImpl#submitApproval 写入；
+    - approveMethod = 2（BpmUserTaskApproveMethodEnum.RATIO 多人会签按通过比例）
+    - completionCondition = ${ nrOfCompletedInstances/nrOfInstances >= 1.00}（100%，即**全部通过才算过**）
+      ⚠️ 表达式里的空格是基座惯例（`BpmUserTaskApproveMethodEnum.RATIO.getCompletionCondition()`
+         生成的就是 `${ nrOfCompletedInstances/nrOfInstances >= %s}`），照抄不要"美化"掉空格。
+
+  为什么 collection 仍然写 `${coll_userList}`：Flowable 的 BPMN 校验要求多实例节点必须有
+  collection 或 loopCardinality，而它的值在运行期被上面的 behavior 覆盖，故沿用基座自带示例
+  （src/test/resources/bpmn/multi-instance/user-task.bpmn20.xml）里的占位变量名。
+
+  ========== 其余关键约定（来自基座源码 + W3-P4/W3-P5 实证踩坑，勿凭记忆修改） ==========
+
+  1. 流程 key/name 必须与流程模型（ACT_RE_MODEL）的 key/name 完全一致，否则
+     BpmProcessDefinitionServiceImpl#createProcessDefinition 抛 key/name NOT_MATCH；
+  2. **审批节点直连唯一 EndEvent，不要用单出线排他网关**（lessons-learned L2-13）：
+     `flowable-exclusive-gateway-condition-not-allowed-on-single-seq-flow`；
+     通过走 approveTask 的 taskService.complete，驳回走 rejectTask 的 moveTaskToEnd
+     （取「第一个 EndEvent」），两条路径都不需要网关，且只留一个 EndEvent 才能保证其唯一；
+  3. **驳回策略 = 默认终止型**（不配 rejectHandlerType）：任一审批人驳回 → 实例 STATUS=REJECT
+     → 业务侧「已取消 + 回补预扣 + 冲正流水」。不使用「驳回至发起人（RETURN_USER_TASK）」的原因：
+     V1 的库存在提交审批时就已扣减，退回发起人节点后单据会**长期停在 1(已提交) 且库存已扣**，
+     既等不到终态回调、也无法回补——这与「驳回必须回补」的硬要求冲突。
+     spec §5.3 的「驳回至发起人」演示特性留给 W5 的 V2 链路（预扣在 Redis、可原子回滚），
+     口径已记入 docs/plans/plan-w4-material-v1.md 的 Phase 5 进度日志。
+
+  流程变量（由 buildcloud-material 的 RequisitionApprovalServiceImpl 发起时传入）：
+    businessKey = 申领单 id（写 ACT_HI_PROCINST.BUSINESS_KEY_，回调时原样带回）
+    reqNo       = 申领单号（模板/待办展示用）
+    items       = 明细摘要文本（"物料1×10；物料2×20"，审批人一眼看清申领内容）
+    approvers   = 会签审批人用户编号列表（List<Long>，本流程**唯一**决定实例数的变量）
+    initiator   = 发起人用户编号
+-->
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             targetNamespace="http://bpm.buildcloud.com/definition">
+    <process id="requisition-approve" name="材料申领审批" isExecutable="true">
+        <documentation>材料申领会签审批：全部审批人通过后单据转为已扣减（库存在提交审批时已扣减，此处不再扣）；任一审批人驳回则取消申领并回补库存、写冲正流水。</documentation>
+
+        <startEvent id="StartEvent" name="发起材料申领"/>
+
+        <!-- 会签节点：并行多实例，实例数 = 流程变量 approvers 的人数（基座 EXPRESSION 候选策略） -->
+        <userTask id="materialCoSign" name="材料会签审批"
+                  flowable:candidateStrategy="60" flowable:candidateParam="${approvers}">
+            <extensionElements>
+                <flowable:candidateStrategy>60</flowable:candidateStrategy>
+                <flowable:candidateParam>${approvers}</flowable:candidateParam>
+                <!-- 2 = 多人会签（按通过比例）；配合下面 100% 的完成条件即「全部通过才过」 -->
+                <flowable:approveMethod>2</flowable:approveMethod>
+            </extensionElements>
+            <multiInstanceLoopCharacteristics isSequential="false" flowable:collection="${coll_userList}">
+                <completionCondition>${ nrOfCompletedInstances/nrOfInstances >= 1.00}</completionCondition>
+            </multiInstanceLoopCharacteristics>
+        </userTask>
+
+        <!-- 审批结束：通过则实例 APPROVE，驳回则由 moveTaskToEnd 跳到本节点并置 REJECT -->
+        <endEvent id="EndEventApprove" name="审批结束"/>
+
+        <sequenceFlow id="flowStart" sourceRef="StartEvent" targetRef="materialCoSign"/>
+        <sequenceFlow id="flowApprove" sourceRef="materialCoSign" targetRef="EndEventApprove"/>
+    </process>
+
+    <!-- 流程图元数据：管理端「流程模型」预览用（无 BPMNDI 会导致设计器打开空白画布） -->
+    <bpmndi:BPMNDiagram id="BPMNDiagram_requisition-approve">
+        <bpmndi:BPMNPlane bpmnElement="requisition-approve" id="BPMNPlane_requisition-approve">
+            <bpmndi:BPMNShape bpmnElement="StartEvent" id="BPMNShape_StartEvent">
+                <omgdc:Bounds height="36.0" width="36.0" x="100.0" y="163.0"/>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="materialCoSign" id="BPMNShape_materialCoSign">
+                <omgdc:Bounds height="80.0" width="100.0" x="186.0" y="141.0"/>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="EndEventApprove" id="BPMNShape_EndEventApprove">
+                <omgdc:Bounds height="36.0" width="36.0" x="426.0" y="163.0"/>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNEdge bpmnElement="flowStart" id="BPMNEdge_flowStart">
+                <omgdi:waypoint x="136.0" y="181.0"/>
+                <omgdi:waypoint x="186.0" y="181.0"/>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="flowApprove" id="BPMNEdge_flowApprove">
+                <omgdi:waypoint x="286.0" y="181.0"/>
+                <omgdi:waypoint x="426.0" y="181.0"/>
+            </bpmndi:BPMNEdge>
+        </bpmndi:BPMNPlane>
+    </bpmndi:BPMNDiagram>
+</definitions>

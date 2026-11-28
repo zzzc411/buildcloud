@@ -18,6 +18,7 @@ import cn.iocoder.yudao.module.bpm.api.event.OaVehicleApplyStatusListener;
 import cn.iocoder.yudao.module.bpm.api.event.OaVehicleReturnStatusListener;
 import cn.iocoder.yudao.module.bpm.api.event.PaymentApproveStatusListener;
 import cn.iocoder.yudao.module.bpm.api.event.ProjectApproveStatusListener;
+import cn.iocoder.yudao.module.bpm.api.event.RequisitionApproveStatusListener;
 import cn.iocoder.yudao.module.system.api.dept.DeptApi;
 import cn.iocoder.yudao.module.system.api.dept.PostApi;
 import cn.iocoder.yudao.module.system.api.dict.DictDataApi;
@@ -153,6 +154,19 @@ public class RpcConfiguration {
     @ConditionalOnMissingBean(name = "paymentApproveStatusListener")
     public PaymentApproveStatusListener paymentApproveStatusListener() {
         return new PaymentApproveStatusListener();
+    }
+
+    /**
+     * 材料申领审批（requisition-approve）结果转发器 —— W4-P5 新增，与上一条同构。
+     *
+     * spec v1.2 §5.2「申领审批（Flowable）」+ §5.3「requisition-approve（材料申领，含会签示例）」；
+     * 业务侧接收端为 buildcloud-material-server 的 RequisitionApprovalListener。
+     * 纯新增，不改动上面任何既有 bean（ADR-003「影响」第 2 条：W4/W5 各需再加一处，本条即 W4 那一处）。
+     */
+    @Bean
+    @ConditionalOnMissingBean(name = "requisitionApproveStatusListener")
+    public RequisitionApproveStatusListener requisitionApproveStatusListener() {
+        return new RequisitionApproveStatusListener();
     }
 
 }

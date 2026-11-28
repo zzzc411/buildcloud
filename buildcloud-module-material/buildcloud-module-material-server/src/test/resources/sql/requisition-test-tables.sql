@@ -1,6 +1,11 @@
 -- =====================================================================================
 -- 申领子域（W4-P4：申领单 / 申领明细 / 库存 / 库存流水）单元测试专用 H2 建表脚本（MODE=MYSQL）
 --
+-- W4-P5 追加：bc_requisition 补 approvers / actual_out_time / actual_return_time 三列、
+--            bc_requisition_item 补 returned_qty 一列 —— 与 sql/buildcloud/08-requisition-approval.sql
+--            的 ALTER 严格对应（生产靠 08 脚本 ALTER，测试靠本文件全量 CREATE，**两边口径必须一致**）。
+--            审批/出库/退料三条链路的集成用例（RequisitionApprovalServiceImplTest）直接复用本文件。
+--
 -- 为什么独立成文件（而不是写进 create_tables.sql、也不复用 stock-test-tables.sql）：
 --   1. create_tables.sql / clean.sql 是 material 域多个并行 worker 的共享文件（P2 基础数据、
 --      P3 库存流水、P4 申领），谁改谁冲突 —— 故 P2/P3/P4 各自备脚本（见那两个文件头注释）；
@@ -60,6 +65,10 @@ CREATE TABLE IF NOT EXISTS "bc_requisition"
     "timeout_time"        timestamp   DEFAULT NULL,
     "approval_status"     tinyint     NOT NULL DEFAULT -1,
     "process_instance_id" varchar(64) DEFAULT NULL,
+    -- W4-P5（对应 sql/buildcloud/08-requisition-approval.sql）：会签审批人 + 出库/退料时间
+    "approvers"           varchar(255) DEFAULT NULL,
+    "actual_out_time"     timestamp   DEFAULT NULL,
+    "actual_return_time"  timestamp   DEFAULT NULL,
     "remark"              varchar(500) DEFAULT NULL,
 
     "tenant_id"           bigint      NOT NULL DEFAULT 0,
@@ -88,6 +97,8 @@ CREATE TABLE IF NOT EXISTS "bc_requisition_item"
     "requisition_id" bigint         NOT NULL,
     "material_id"    bigint         NOT NULL,
     "quantity"       decimal(18, 4) NOT NULL DEFAULT 0.0000,
+    -- W4-P5：累计已退料量（可退量 = quantity - returned_qty），精度必须与 quantity 一致
+    "returned_qty"   decimal(18, 4) NOT NULL DEFAULT 0.0000,
     "remark"         varchar(500)   DEFAULT NULL,
 
     "tenant_id"      bigint         NOT NULL DEFAULT 0,
@@ -102,6 +113,9 @@ CREATE TABLE IF NOT EXISTS "bc_requisition_item"
 
 CREATE INDEX IF NOT EXISTS "idx_requisition_id" ON "bc_requisition_item" ("requisition_id");
 CREATE INDEX IF NOT EXISTS "idx_item_material_id" ON "bc_requisition_item" ("material_id");
+-- W4-P5：明细行原子条件更新（WHERE returned_qty + ? <= quantity）按主键定位，无需额外索引；
+-- 退料校验先按 requisition_id 取全部明细（走上面的 idx_requisition_id）。
+CREATE INDEX IF NOT EXISTS "idx_requisition_process_instance" ON "bc_requisition" ("process_instance_id");
 
 -- ------------------------------------------------------------------------------------
 -- 项目库存（对应 bc_material_stock；字段与 stock-test-tables.sql 一致）
@@ -132,7 +146,9 @@ CREATE INDEX IF NOT EXISTS "idx_stock_material_id" ON "bc_material_stock" ("mate
 
 -- ------------------------------------------------------------------------------------
 -- 库存流水（对应 bc_stock_log；字段与 stock-test-tables.sql 一致）
--- quantity 带符号：biz_type=2 申领扣减为负、biz_type=4 冲正为正
+-- quantity 带符号：biz_type=2 申领扣减为负、biz_type=3 退回/biz_type=4 冲正为正
+-- W4-P5 起本表新增「同一张单同一物料同一 biz_type 只有一条」的幂等判据，
+-- 相关断言依赖 idx_project_biz（按 project_id + biz_no 圈定）。
 -- ------------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS "bc_stock_log"
 (

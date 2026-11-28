@@ -3,7 +3,7 @@
 | 项 | 内容 |
 | --- | --- |
 | 用途 | 沉淀 W0-W8 开发过程中**真实踩到的坑**与验证过的做法，供后续 Phase、子智能体派发上下文包、面试复盘复用 |
-| 版本 | v1.1（覆盖 W0-W4，2026-11-28；38 条） |
+| 版本 | v1.2（覆盖 W0-W4，2026-11-28；40 条） |
 | 迭代方式 | **追加式**：每个 Phase 收尾时追加条目，不删旧条目（已失效的标记「已失效」并注明原因） |
 | 定位 | 不是教程，是「本项目在这台机器、这套基座上，什么会真的坏」的证据清单 |
 
@@ -236,6 +236,61 @@ org.flowable.common.engine.api.FlowableException: Errors while parsing:
 `PUT /admin-api/bpm/model/update-bpmn`，body `{ id, bpmnXml }`（该接口标了 `@Deprecated` 但仍可用；
 若将来移除，改走 `PUT /admin-api/bpm/model/update` 带完整 metaInfo）。
 **影响面**：所有「BPMN 作为仓库内源文件、用脚本部署」的项目；`scripts/bpm-deploy-project-approve.ps1` 已修。
+
+### L2-15 引了 `yudao-module-bpm-api` 依赖 ≠ Feign 客户端可用：还必须 `@EnableFeignClients(clients=...)`（W4-P5 实证）
+
+**现象**：material 服务加上 `yudao-module-bpm-api` 依赖后编译通过，但启动即失败：
+```
+APPLICATION FAILED TO START
+A component required a bean of type 'cn.iocoder.yudao.module.bpm.api.task.BpmProcessInstanceApi'
+that could not be found.
+```
+**原因**：`BpmProcessInstanceApi` 上只有 `@FeignClient`，**依赖包里的接口不会自动被注册成代理 Bean**。
+必须由使用方显式声明 `@EnableFeignClients(clients = {BpmProcessInstanceApi.class})`（基座 oa-server 与
+本项目 project-server 都是这么做的，各自有一个 `framework/rpc/config/RpcConfiguration`）。
+`@SpringBootApplication` 默认只扫 `com.buildcloud.material` 包，扫不到基座包下的 Feign 接口。
+**修复**：在业务模块内新增
+```java
+@Configuration(value = "materialRpcConfiguration", proxyBeanMethods = false)
+@EnableFeignClients(clients = {BpmProcessInstanceApi.class})
+public class RpcConfiguration {}
+```
+bean 名带模块前缀，避免将来聚合部署时与 project 模块的同名配置类冲突。
+**判别**：启动日志里是 `required a bean of type ... could not be found` 且**只缺 Feign 接口**（不是缺 Mapper/DataSource）
+→ 先查 `@EnableFeignClients`，不要去查依赖坐标。
+**影响面**：任何「新增自研服务 + 要调基座 RPC」的场景（W5 的 report/ai 服务同样会遇到）。
+**另一面**：本类改动只加了一行 import，不改变任何既有行为。
+
+### L2-16 会签的「多次回调」在业务侧只表现为一次：中途状态要靠 `ACT_RU_TASK` 而非业务回调验证（W4-P5 实证）
+
+**背景**：基座 `BpmParallelMultiInstanceBehavior` 把会签节点改写为并行多实例，
+**实例结束事件只在 `nrOfCompletedInstances >= nrOfInstances` 时发布**。
+因此「会签 2 人只批了 1 个」在业务侧**根本没有回调**——不是回调丢了，是流程还合法地在跑。
+**踩坑姿势**：把「驳回后状态没变」误判为链路断开（L2-12 那条的误报）。
+**正确验证口径（三项一起看）**：
+1. `SELECT COUNT(*) FROM ACT_RU_TASK WHERE PROC_INST_ID_=?` —— 2 人会签应当是 2，批一个减一个；
+2. `SELECT ASSIGNEE_ FROM ACT_RU_TASK` —— 两个任务应当是**两个不同的人**（验证 `${approvers}` 表达式取人生效）；
+3. 业务表 `bc_requisition.status / approval_status` —— 只在任务数归零后才允许变化。
+**实测（W4-P5 联调）**：approvers=[1,100] → `ACT_RU_TASK` 2 行，assignee 分别为 `1` 与 `100`；
+admin(1) 批准后剩 1 行（assignee=100）、业务状态仍是 1；用 yudao(100) 登录再批准 → 任务归零、
+bpm 转发器回调 `status=2`、业务状态 1→2、**库存未变**。
+**附加坑**：基座 `/admin-api/bpm/task/approve` 是 **`PUT`** 而非 POST（用 POST 会得到
+`code=405 请求方法不正确`，看着像接口不存在）；且**不能代替别人审批**——
+用 admin 去批 assignee=100 的任务会返回 `1009005001 该任务的审批人不是你`。
+
+### L2-17 PowerShell `Set-Content -Encoding utf8` 会给文件加 BOM，把 Java 源码编译炸掉（W4-P5 实证）
+
+**现象**：对刚生成的 `.java` 做一次 `(Get-Content x -Raw) -replace ... | Set-Content -NoNewline -Encoding utf8 x`
+之后编译报 `非法字符: '\ufeff'` + 后续几十条「需要 ')';」「非法类型开始」，错误行号指向中文字符串内部。
+**双重根因**：
+1. PS 5.1 的 `-Encoding utf8` 写入 **UTF-8 with BOM**，Java 编译器把 BOM 当非法字符；
+2. 更隐蔽的是**读写往返的编码漂移**：`Get-Content -Raw` 按当前 ANSI 代码页读、再按 UTF-8 写回，
+   中文注释被二次编码（`申请单编号` → `鐢抽鍗曠紪鍙`），从此**任何编译都不可能过**。
+**修复**：改 Java 源文件一律用
+`[IO.File]::ReadAllText($p, [Text.Encoding]::UTF8)` + `[IO.File]::WriteAllText($p, $text, (New-Object System.Text.UTF8Encoding($false)))`，
+且**优先用编辑工具而不是 shell**；改完抽查首三字节应为 `112,97,99`（`pac`，即 `package`），
+**绝不能是 `239,187,191`**（UTF-8 BOM）。
+**与 L1-3 的关系**：`.ps1` 需要 BOM、`.env` 需要无 BOM、**`.java`/`.sql` 必须无 BOM**——三者相反，容易混。
 
 ---
 

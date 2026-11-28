@@ -100,6 +100,28 @@ public class RequisitionDO extends TenantBaseDO {
     private String processInstanceId;
 
     /**
+     * 会签审批人用户编号列表（逗号分隔，如 "1,100"；W4-P5 起）
+     *
+     * 提交审批时暂存（基座回调事件不带流程变量，见 sql/buildcloud/08-requisition-approval.sql
+     * 文件头的取舍说明），出结果后**保留**（审计要看「这张单当时由谁会签」）。
+     */
+    private String approvers;
+
+    /**
+     * 实际出库时间（已扣减2 → 已出库3 时写入；W4-P5 起）
+     *
+     * 出库只是一次性动作且**不再动库存**（V1 在提交审批时就已扣减），
+     * 但报表域算「在途料时长 / 领用及时率」需要一个真实的时间基准，
+     * 且它与 create_time（建单时间）语义完全不同，不能复用。
+     */
+    private LocalDateTime actualOutTime;
+
+    /**
+     * 最近一次退料时间（退料可多次发生，逐笔明细见 bc_stock_log 的 biz_type=3）
+     */
+    private LocalDateTime actualReturnTime;
+
+    /**
      * 备注
      */
     private String remark;

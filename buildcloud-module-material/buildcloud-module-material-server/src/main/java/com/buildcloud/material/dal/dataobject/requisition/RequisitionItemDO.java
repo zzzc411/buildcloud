@@ -60,6 +60,18 @@ public class RequisitionItemDO extends TenantBaseDO {
     private BigDecimal quantity;
 
     /**
+     * 累计已退料量（可退量 = quantity - returned_qty；W4-P5 起）
+     *
+     * 精度必须与 quantity / bc_material_stock.available_qty 一致（decimal(18,4)），
+     * 否则会出现「退完还差 0.0001、单据永远停在部分回退」的幽灵差异。
+     *
+     * 为什么不按 biz_no 聚合 bc_stock_log 算可退量：流水表是 W6 的分库分表主表，
+     * 跨片聚合会变成跨片查询；本列还能支撑「WHERE returned_qty + ? <= quantity」的原子条件更新，
+     * 让并发重复退料的第二个请求影响行数 0 而非把库存退两次。
+     */
+    private BigDecimal returnedQty;
+
+    /**
      * 备注
      */
     private String remark;

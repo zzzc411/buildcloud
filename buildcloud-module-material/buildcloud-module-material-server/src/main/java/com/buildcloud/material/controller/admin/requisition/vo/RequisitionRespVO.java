@@ -48,6 +48,17 @@ public class RequisitionRespVO {
     @Schema(description = "审批流程实例编号")
     private String processInstanceId;
 
+    @Schema(description = "会签审批人用户编号列表（逗号分隔；W4-P5 提交审批时暂存）", example = "1,100")
+    private String approvers;
+
+    @Schema(description = "实际出库时间（已出库后才有值）")
+    @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND)
+    private LocalDateTime actualOutTime;
+
+    @Schema(description = "最近一次退料时间（发生过退料后才有值）")
+    @DateTimeFormat(pattern = FORMAT_YEAR_MONTH_DAY_HOUR_MINUTE_SECOND)
+    private LocalDateTime actualReturnTime;
+
     @Schema(description = "备注")
     private String remark;
 
@@ -73,6 +84,9 @@ public class RequisitionRespVO {
 
         @Schema(description = "申领数量（正数）", requiredMode = Schema.RequiredMode.REQUIRED, example = "10.0000")
         private BigDecimal quantity;
+
+        @Schema(description = "累计已退料量（可退量 = quantity - returnedQty）", example = "0.0000")
+        private BigDecimal returnedQty;
 
         @Schema(description = "备注")
         private String remark;
