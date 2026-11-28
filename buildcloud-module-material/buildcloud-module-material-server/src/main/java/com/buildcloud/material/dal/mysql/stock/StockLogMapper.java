@@ -197,4 +197,32 @@ public interface StockLogMapper extends BaseMapperX<StockLogDO> {
                 .orderByAsc(StockLogDO::getId));
     }
 
+    /**
+     * 汇总某维度某类业务的流水数量（**0 超卖断言的核心查询**）
+     *
+     * <p>「期初 + Σ(biz_type=2 的 quantity) == available_qty」是 W5 冒烟的第 1 条断言：
+     * `quantity` 用正负号表示增减，故申领扣减为负，直接相加即为净变动。</p>
+     *
+     * @param projectId  项目编号
+     * @param materialId 物料编号
+     * @param bizType    业务类型（见 {@link com.buildcloud.material.enums.stock.StockBizTypeEnum}）
+     * @return 汇总值；无流水时返回 {@code null}（调用方转为 0）
+     */
+    default BigDecimal sumQuantityByProjectAndMaterialAndBizType(Long projectId, Long materialId, Integer bizType) {
+        List<StockLogDO> list = selectList(new LambdaQueryWrapperX<StockLogDO>()
+                .eq(StockLogDO::getProjectId, projectId)
+                .eq(StockLogDO::getMaterialId, materialId)
+                .eq(StockLogDO::getBizType, bizType));
+        if (list.isEmpty()) {
+            return null;
+        }
+        BigDecimal sum = BigDecimal.ZERO;
+        for (StockLogDO log : list) {
+            if (log.getQuantity() != null) {
+                sum = sum.add(log.getQuantity());
+            }
+        }
+        return sum;
+    }
+
 }

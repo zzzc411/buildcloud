@@ -79,7 +79,7 @@ docs/
 | `plans/plan-w2-repo-skeleton.md` | 2026-11-24 | 已完成 | W2：基座裁剪 + 4 模块骨架 + 生成器四件套（P1-P4 全绿，tag `w2`） |
 | `plans/plan-w3-project-contract.md` | 2026-11-24 | 已完成 | W3：项目域 + 合同域 + 立项/进度款审批（P1-P5 全绿，tag `w3`） |
 | `plans/plan-w4-material-v1.md` | 2026-11-24 | 已完成 | W4：材料域 V1 同步链路 + 申领审批闭环（P1-P6 全绿，tag `w4`） |
-| `plans/plan-w5-concurrent-v2.md` | 2026-11-24 | 进行中 | W5：高并发改造 V2（Lua/事务消息/延迟关单/对账/缓存，P1 ✅） |
+| `plans/plan-w5-concurrent-v2.md` | 2026-11-24 | 进行中 | W5：高并发改造 V2（P1-P4/P6 ✅，P5 待做） |
 | `plans/plan-w6-consistency-report.md` | 2026-11-24 | 未开始 | W6：Seata + 分库分表 + 异步报表 + 首轮压测 |
 | `plans/plan-w7-ai-rag.md` | 2026-11-24 | 未开始 | W7：AI 模块（RAG/SSE/引用溯源/LLM 动态配置） |
 | `plans/plan-w8-final-deploy.md` | 2026-11-24 | 未开始 | W8：终版压测 + 云服务器部署上线 + 收官 |
@@ -91,6 +91,7 @@ docs/
 | `architecture/er-diagram-v0.md` | 2026-11-27 | 生效 | 项目域 + 合同域 ER 图 v0（7 表 66 列，W8 定稿） |
 | `decisions/004-unique-index-with-logical-delete.md` | 2026-11-27 | 生效 | ADR-004：逻辑删除与业务唯一约束口径（A 类 Service 校验 / B 类保留索引） |
 | `testing/demo-script-w4.md` | 2026-11-28 | 生效 | W4 端到端演示走查手册（申领→会签→出库→退料→对账，含 curl 与对账 SQL；**非性能报告**） |
+| `testing/smoke-w5.md` | 2026-11-29 | 生效 | **W5 高并发冒烟报告**（三断言全过；V2 吞吐数据缺，移交 W6 正式压测） |
 | `decisions/003-bpm-callback-forwarder.md` | 2026-11-27 | 生效 | ADR-003：BPM 审批结果跨服务回调转发器（push，含 pull 降级预案） |
 | `decisions/002-nacos-namespace.md` | 2026-11-25 | 生效 | ADR-002：本地 Nacos 命名空间改用 public（临时，W2 再评估） |
 | `architecture/arch-overview-v0.md` | 2026-11-25 | 生效 | 架构图 v0（读码定稿版，含与 spec §3.1 差异标注） |
