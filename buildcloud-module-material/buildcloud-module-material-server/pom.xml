@@ -51,6 +51,28 @@
             <version>${revision}</version>
         </dependency>
 
+        <!--
+          基座 system-api：站内信告警（W5-P4 对账 Job）
+
+          仅引 api 模块（接口 + DTO + 枚举），**不引 system-server**——与 bpm-api 同口径
+          （业务服务不感知对方实现，只走 /rpc-api）。
+
+          用途：NotifyMessageSendApi#sendSingleMessageToAdmin —— 对账差异超阈值时给运维发站内信
+          （spec §6.1 步骤⑦「差异告警（站内信）+ 修复」）。
+
+          依赖说明（AGENTS §6.4）：坐标取自基座既有模块（cn.iocoder.cloud:yudao-module-system-api），
+          版本随 ${revision}，未引入任何新的外部依赖。**它不是"新增依赖"而是"补齐漏掉的坐标"**：
+          bpm-api 并不传递 system-api（2026-11-28 dependency:tree 实测只有 bpm-api + error_prone），
+          而 RpcConfiguration 里显式 @EnableFeignClients(NotifyMessageSendApi.class)
+          必须有该坐标才能编译——这正是 lessons L2-15 的同款情形（"加了依赖还不够，
+          还要显式 EnableFeignClients"）。
+        -->
+        <dependency>
+            <groupId>cn.iocoder.cloud</groupId>
+            <artifactId>yudao-module-system-api</artifactId>
+            <version>${revision}</version>
+        </dependency>
+
         <!-- 业务组件 -->
         <dependency>
             <groupId>cn.iocoder.cloud</groupId>

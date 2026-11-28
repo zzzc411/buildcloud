@@ -150,3 +150,21 @@ buildcloud:
     #   W5 压测前请先用「改 Nacos → 看 factory 日志/看 submit 行为」验证一次再下结论。
     # 未配置时按 V1 处理（删掉本行也能跑）。
     requisition-mode: V1
+
+    # 库存对账（spec v1.2 §6.1 步骤⑦；读取方 com.buildcloud.material.framework.job.config.ReconcileProperties）
+    #
+    # 调度入口有两处：
+    #   ① XXL-Job `stockReconcileJob`（生产常态，路由策略=分片广播，按 projectId % shardTotal 分片）；
+    #   ② 手动触发接口 POST /admin-api/buildcloud-material/stock/reconcile/trigger（admin，
+    #      权限 material:stock:reconcile）——local 下 xxl.job.enabled=false，执行器不注册，
+    #      **只有这条路径能真跑**（见 StockReconcileJob 类注释的说明）。
+    reconcile:
+      # 差异条数 > 该值才告警。默认 0 = 有任何差异就告警（用「>」而不是「>=」的理由见 ReconcileProperties）
+      alert-threshold: 0
+      # 修复总闸：false = 只检测/落快照/告警，一律不动 Redis 与 DB（排障止血用）
+      fix-enabled: true
+      # 站内信接收人（system_users.id，逗号分隔）。**留空 = 只打 error 日志、不发站内信**（明确降级）
+      # 本地不写字面量：通过环境变量 RECONCILE_ALERT_USER_IDS 注入，或直接在本地未跟踪配置里改
+      alert-user-ids: ${RECONCILE_ALERT_USER_IDS:}
+      # 站内信模板编号（基座 system_notify_template.code；默认用基座自带通用模板 USER_SEND）
+      notify-template-code: ${RECONCILE_NOTIFY_TEMPLATE:USER_SEND}

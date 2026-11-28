@@ -253,4 +253,43 @@ public interface MaterialStockMapper extends BaseMapperX<MaterialStockDO> {
                                         @Param("materialId") Long materialId,
                                         @Param("quantity") BigDecimal quantity);
 
+    // ========== 对账修复（W5-P4） ==========
+
+    /**
+     * **对账回补**（D2 删除脏扣减流水后，把多扣的量还回库存）：按业务唯一键直接累加
+     *
+     * <pre>
+     *   UPDATE bc_material_stock
+     *      SET available_qty = available_qty + #{quantity},
+     *          version       = version + 1,
+     *          update_time   = NOW()
+     *    WHERE project_id = #{projectId} AND material_id = #{materialId} AND deleted = 0
+     * </pre>
+     *
+     * ========== 为什么不用 {@link #increaseAvailableQtyUnderLock} ==========
+     *
+     * 那个方法要求调用方**已经** `SELECT ... FOR UPDATE` 锁住该行（参数是主键 id），
+     * 是对账之外的业务路径（V1 取消/驳回）的用法。对账修复走的是"已经知道 projectId+materialId、
+     * 但要少一次往返"的路径：与 {@link #reduceAvailableQtyByBusinessKey} 对称，
+     * 用业务唯一键 `uk_project_material` 直接定位，一条语句完成。
+     *
+     * **只增不减、无 `>=` 条件**：回补不会把库存变成负；唯一要防的是重复回补（会凭空多库存），
+     * 那由调用方的**条件逻辑删除**（`DELETE ... WHERE id AND deleted=0` 影响 1 行才继续）保证——
+     * 只有真正删掉了那条脏流水才回补一次，与 V1 取消路径"靠冲正流水存在性防重复"同一思路。
+     *
+     * `deleted = 0` 必须自己写（注解 SQL 不走 MyBatis-Plus 逻辑删除拼接）；
+     * `tenant_id` 由多租户插件自动追加（DO extends TenantBaseDO，AGENTS R-8）。
+     *
+     * @param projectId  项目编号
+     * @param materialId 物料编号
+     * @param quantity   回补数量（> 0）
+     * @return 影响行数（1 成功；0 表示库存行不存在/已删除 → 调用方必须整体回滚）
+     */
+    @Update("UPDATE bc_material_stock SET available_qty = available_qty + #{quantity}, "
+            + "version = version + 1, update_time = NOW() "
+            + "WHERE project_id = #{projectId} AND material_id = #{materialId} AND deleted = 0")
+    int increaseAvailableQtyUnderLockForReconcile(@Param("projectId") Long projectId,
+                                                  @Param("materialId") Long materialId,
+                                                  @Param("quantity") BigDecimal quantity);
+
 }

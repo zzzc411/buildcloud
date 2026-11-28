@@ -71,8 +71,13 @@ public class RequisitionTimeoutDelayLevelIntegrationTest {
 
     /**
      * 探针专用 topic：与业务 topic 隔离，避免测试消息被真实消费者处理（L3-9：不要给别人的链路添乱）
+     *
+     * <p><b>必须每次运行唯一</b>（W5-P4 实证）：本测试会发一条 level=18（2 小时）的消息，
+     * 断言它「5 秒内收不到」。如果 topic 名固定，这条消息 2 小时后会真正投递到同一 topic——
+     * 后续任意一次运行都会把它当成「刚发出的 level=18 消息提前到达」，从而**假失败**。
+     * 用运行时间戳后缀隔离，跨次运行互不污染。</p>
      */
-    private static final String TOPIC = "buildcloud-material-p3-delay-probe";
+    private static final String TOPIC = "buildcloud-material-p3-delay-probe-" + System.currentTimeMillis();
 
     private static final String NAME_SRV = "127.0.0.1:9876";
 
@@ -121,18 +126,22 @@ public class RequisitionTimeoutDelayLevelIntegrationTest {
             sendStart[0] = System.currentTimeMillis();
             assertEquals(SendStatus.SEND_OK, producer.send(shortMsg).getSendStatus());
 
-            // ===== 断言 2：level=1 的消息应在 20 秒内到达 =====
-            boolean arrived = shortArrived.await(20, TimeUnit.SECONDS);
+            // ===== 断言 2：level=1 的消息应在 40 秒内到达 =====
+            // 为什么是 40s 而不是 20s（W5-P4 实证）：本测试现在用**每次唯一的新 topic**（避免跨次污染），
+            // 而新 topic 首次创建 + 路由同步 + 定时消息落盘，在 5.3.1 上实测可能超过 20 秒。
+            // 放宽到 40s 只影响「慢」的判定，不影响「快」的语义——真正的判据是
+            // 「远小于 level=18 的 2 小时」，40s 同样满足。
+            boolean arrived = shortArrived.await(40, TimeUnit.SECONDS);
             long latency = System.currentTimeMillis() - sendStart[0];
-            assertTrue(arrived, "level=1（1 秒）的消息应在 20 秒内到达，否则说明 Broker 未按默认表延迟投递");
+            assertTrue(arrived, "level=1（1 秒）的消息应在 40 秒内到达（新 topic 首建可能较慢），否则说明 Broker 未按默认表延迟投递");
             // 实测（2026-11-28，RocketMQ 5.3.1）：**消费端回读不到** PROPERTY_DELAY_TIME_LEVEL——
             // 投递时 Broker 会把 DELAY 属性清掉（客户端 SDK 层面同样是"一次性"属性），
             // 所以"级别回读"不能作为断言（第一次写这条用例时就是因为这个吃了红：
             // 消息 1 秒就到了、证明延迟生效，但 level 读出来是 null）。
             // 换成两条更强、且与版本无关的判据：
-            //   a) 延迟确实很短（< 20 秒）→ 说明按"1 秒"级别投递，而不是按别的级别（18 是 2 小时）；
+            //   a) 延迟确实很短（< 40 秒）→ 说明按"1 秒"级别投递，而不是按别的级别（18 是 2 小时）；
             //   b) 同一条消息的 level 属性已不再携带 → 与 Broker 清属性的行为一致（记录事实，不判死）。
-            assertTrue(latency < 20_000L, "level=1 的消息延迟应远小于 20 秒，实际 " + latency + " ms");
+            assertTrue(latency < 40_000L, "level=1 的消息延迟应远小于 40 秒，实际 " + latency + " ms");
             String echoedLevel = seenLevels.get(shortBody);
             assertTrue(echoedLevel == null || "1".equals(echoedLevel),
                     "投递后的延迟级别应为 null（Broker 已清除）或 1，实际：" + echoedLevel);

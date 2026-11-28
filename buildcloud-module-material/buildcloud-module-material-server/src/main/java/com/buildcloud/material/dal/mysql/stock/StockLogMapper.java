@@ -5,6 +5,7 @@ import cn.iocoder.yudao.framework.mybatis.core.mapper.BaseMapperX;
 import cn.iocoder.yudao.framework.mybatis.core.query.LambdaQueryWrapperX;
 import com.buildcloud.material.controller.admin.stock.vo.StockLogPageReqVO;
 import com.buildcloud.material.dal.dataobject.stock.StockLogDO;
+import com.buildcloud.material.enums.stock.StockBizTypeEnum;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -150,6 +151,50 @@ public interface StockLogMapper extends BaseMapperX<StockLogDO> {
                 .eq(StockLogDO::getBizType, bizType)
                 .orderByDesc(StockLogDO::getId)
                 .last("LIMIT 1"));
+    }
+
+    // ========== 对账（W5-P4） ==========
+
+    /**
+     * 查询某项目某物料**全部**申领扣减流水（biz_type=2），按 id 升序
+     *
+     * 用途（{@code StockReconcileService} 的 D2 判定）：一条 SQL 取回该库存维度上
+     * 所有已生效的扣减流水，与 Redis 明细（`HGETALL pm:prededuct:{pid}:{mid}`）**逐笔比对**——
+     * DB 有而 Redis 没有的 reqNo 就是 D2 差异。
+     *
+     * 为什么不用「逐个 reqNo 查一次 DB」（即 N+1）：对账是定时全量扫描，
+     * 库存维度数与流水行数都是千级，N+1 会把一轮对账从秒级拖到分钟级；
+     * 这里一次取回、内存里建 Set 比对，复杂度 O(n)。
+     *
+     * @param projectId  项目编号（分片键，必带）
+     * @param materialId 物料编号
+     * @return 该维度全部申领扣减流水（id 正序；无流水返回空列表）
+     */
+    default List<StockLogDO> selectListRequisitionOutLogs(Long projectId, Long materialId) {
+        return selectList(new LambdaQueryWrapperX<StockLogDO>()
+                .eq(StockLogDO::getProjectId, projectId)
+                .eq(StockLogDO::getMaterialId, materialId)
+                .eq(StockLogDO::getBizType, StockBizTypeEnum.REQUISITION_OUT.getBizType())
+                .orderByAsc(StockLogDO::getId));
+    }
+
+    /**
+     * 按业务单号查询某项目某物料的全部流水（含各种 biz_type，id 正序）
+     *
+     * 用途（D1 判定「单据在途」分支）：补扣减前要先确认「本单本物料确实一笔都没扣过」，
+     * 补完之后再用 {@link #selectCountByBizNoAndType} 做幂等复核。
+     *
+     * @param projectId  项目编号
+     * @param materialId 物料编号
+     * @param bizNo      业务单号（req_no）
+     * @return 流水列表（无记录返回空列表）
+     */
+    default List<StockLogDO> selectListByBizNo(Long projectId, Long materialId, String bizNo) {
+        return selectList(new LambdaQueryWrapperX<StockLogDO>()
+                .eq(StockLogDO::getProjectId, projectId)
+                .eq(StockLogDO::getMaterialId, materialId)
+                .eq(StockLogDO::getBizNo, bizNo)
+                .orderByAsc(StockLogDO::getId));
     }
 
 }
