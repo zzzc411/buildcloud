@@ -104,3 +104,5 @@ worker 完成并自查 ──▶ 交付（代码+文档+进度日志） ──�
 | 16G 内存起全栈 OOM | 提示词里带上「先看 docs/ops/middleware-limits.md，分批启动」 |
 | worker 提交了密钥 | 验收红线检查 + `.gitignore` 兜底 + 发现即返工重写 |
 | Phase 间上下文断裂 | 前置 Phase 产出物路径写进上下文包；进度日志留痕 |
+| **测试「假绿」：依赖 Redis/MQ 的集成测试静默跳过** | 通报要求：**汇报必须写清 `Tests run / Skipped / Errors` 三个数字**，且 skip 数要能解释（lessons L3-16）；主控复核看 `target/surefire-reports/*.txt`，不只看 `BUILD SUCCESS` |
+| **worker 把「不确定是否生效」写成「已完成」** | 要求关键结论附**可复现的原始证据**（SQL 输出 / curl 响应体 / surefire 数字），而非结论性描述 |

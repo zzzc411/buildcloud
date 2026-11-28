@@ -66,7 +66,7 @@ spec v1.2（范围与排期唯一依据）
 | [plan-w2-repo-skeleton.md](plan-w2-repo-skeleton.md) | W2（12-07 ~ 12-13） | W1；∥ sp-key | 4 | ✅ 已完成（P1-P4 全绿，tag `w2`） | 2026-11-26 |
 | [plan-w3-project-contract.md](plan-w3-project-contract.md) | W3（12-14 ~ 12-20） | W2 | 5（P2∥P3） | ✅ 已完成（P1-P5 全绿，tag `w3`） | 2026-11-27 |
 | [plan-w4-material-v1.md](plan-w4-material-v1.md) | W4（12-21 ~ 12-27） | W3 | 6 | ✅ 已完成（P1-P6 全绿，tag `w4`） | 2026-11-28 |
-| [plan-w5-concurrent-v2.md](plan-w5-concurrent-v2.md) | W5（12-28 ~ 01-03） | W4 | 6（P5∥） | 未开始 | — |
+| [plan-w5-concurrent-v2.md](plan-w5-concurrent-v2.md) | W5（12-28 ~ 01-03） | W4 | 6（P5∥） | 🔄 进行中（P1 ✅） | — |
 | [plan-w6-consistency-report.md](plan-w6-consistency-report.md) | W6（01-04 ~ 01-10） | W5；sp-seeding（硬） | 5（P1-P3∥） | 未开始 | — |
 | [plan-w7-ai-rag.md](plan-w7-ai-rag.md) | W7（01-11 ~ 01-17） | W2 骨架；sp-key；可提前并行 | 5（P4∥） | 未开始 | — |
 | [plan-w8-final-deploy.md](plan-w8-final-deploy.md) | W8（01-18 ~ 01-24） | W6；W7；sp-interview 初稿 | 5（P1/P2/P4∥） | 未开始 | — |
@@ -99,7 +99,7 @@ spec v1.2（范围与排期唯一依据）
 | W2 | repo-skeleton | ✅ 已完成 | 4/4 | P1 入仓 → P2 裁剪+模板化 → P3 四模块（48084-48087）→ P4 生成器四件套；44 模块编译通过；修复 .gitignore 阻断缺陷；tag `w2` |
 | W3 | project-contract | ✅ 已完成 | 5/5 | P1 表/ER → P2 项目子域 → P3 合同子域 → **P4 立项审批** → **P5 进度款审批**；173 tests 全绿；两条审批链端到端真实跑通；tag `w3` |
 | W4 | material-v1 | ✅ 已完成 | 6/6 | P1 表/ER → P2 基础数据 → P3 库存流水 → **P4 申领 V1 行锁对照组** → **P5 会签审批+出库/退料** → P6 索引归一+演示脚本；158 tests；ADR-004 落地；tag `w4` |
-| W5 | concurrent-v2 | ⬜ 未开始 | 0/6 | P5∥ |
+| W5 | concurrent-v2 | 🔄 进行中 | 1/6 | P1 ✅ Redis Lua 原子预扣（20 线程×10 vs 库存 100 → 成功 10 失败 10、账平；16 集成测试真实通过）；P5 可 ∥ |
 | W6 | consistency-report | ⬜ 未开始 | 0/5 | P1-P3∥；依赖 sp-seeding |
 | W7 | ai-rag | ⬜ 未开始 | 0/5 | 可提前并行 |
 | W8 | final-deploy | ⬜ 未开始 | 0/5 | P1/P2/P4∥ |

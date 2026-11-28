@@ -3,7 +3,7 @@
 | 项 | 内容 |
 | --- | --- |
 | 用途 | 沉淀 W0-W8 开发过程中**真实踩到的坑**与验证过的做法，供后续 Phase、子智能体派发上下文包、面试复盘复用 |
-| 版本 | v1.4（覆盖 W0-W4，2026-11-28；43 条） |
+| 版本 | v1.6（覆盖 W0-W5P1，2026-11-28；46 条） |
 | 迭代方式 | **追加式**：每个 Phase 收尾时追加条目，不删旧条目（已失效的标记「已失效」并注明原因） |
 | 定位 | 不是教程，是「本项目在这台机器、这套基座上，什么会真的坏」的证据清单 |
 
@@ -406,6 +406,64 @@ ADR-004 拆掉第一层后，第二层就从「友好提示」变成「**虚假�
    （另：`CREATE FUNCTION` 在开启 binlog 的 MySQL 8 上需要 `log_bin_trust_function_creators=1`。）
 
 **影响面**：所有「改约束/改索引/改口径」的验收；W5 的 V2 索引调优可复用同一套路。
+
+### L3-14 PowerShell 会把 `redis-cli --eval` 的 KEYS/ARGV 分隔符 `,` 当数组运算符吞掉（W5-P1 实证）
+
+**现象**：手工验证 Lua 脚本
+```powershell
+docker exec bc-redis redis-cli -a $pw --no-auth-warning --eval /tmp/stock-prededuct.lua pm:stock:1:2 pm:prededuct:1:2 , REQ-1 30
+```
+脚本里所有 `ARGV` 都是 `nil`，返回 `stock-prededuct: invalid arguments reqNo=nil qty=nil`；
+改用 `redis-cli --eval` 打印 `#ARGV` 得到 **0**。同一段脚本用 `EVAL "..." 2 k1 k2 a1 a2` 却完全正常。
+
+**根因（分两层，排查时逐层剥）**：
+1. **PowerShell 层**：`,` 在 PS 中是**数组构造运算符**，`a , b` 会被并成一个数组再展开，
+   `redis-cli` 根本没收到那个逗号。证据：把分隔符写成字符串字面量 `','` 就恢复正常
+   （`--eval /tmp/t4.lua x y ',' REQ 30` → `#ARGV=2`）。
+2. **redis-cli 层（独立的一条坑）**：`--eval` **只在遇到逗号后**才开始填充 `ARGV`；
+   没有逗号时**所有参数都进 KEYS**（`--eval f a b c , REQ 30` 与 `--eval f a b c REQ 30` 的
+   `KEYS`/`ARGV` 分布完全不同）。所以"参数传了但脚本读到 nil"不代表 key 传错。
+
+**修复**：手工验证 Lua 时用容器内 shell 执行，把逗号交给 `sh` 而不是 PowerShell：
+```powershell
+docker exec bc-redis sh -c "redis-cli -a '$pw' --no-auth-warning --eval /tmp/x.lua k1 k2 , a1 a2"
+```
+或完全绕开 `--eval`（本 Phase 最终采用，最稳）：
+```powershell
+docker exec bc-redis redis-cli -a $pw --no-auth-warning EVAL "$(docker exec bc-redis cat /tmp/x.lua)" 2 k1 k2 a1 a2
+```
+**判别法**：脚本报"参数为 nil"时，先在脚本首行 `return {tostring(#KEYS), tostring(#ARGV)}`
+把分布打出来——`#ARGV=0` 就是本条（逗号被吞），不是脚本逻辑错。
+**影响面**：所有「Windows/PowerShell 下手工 EVAL 校验 Redis Lua」的验收动作（W5 压测、W6/W7 的
+幂等/限流脚本验证都会用到）。**记法**：Java 侧（Redisson）不受影响，只有命令行手工验证受影响。
+
+### L3-15 `RScript.ReturnType` 没有 `INTEGER`，Lua 整数要用 `LONG`（W5-P1 实证）
+
+**现象**：按印象写 `redissonClient.getScript().eval(Mode.READ_WRITE, script, RScript.ReturnType.INTEGER, keys, args)`
+编译直接红：`找不到符号: 变量 INTEGER`。
+**根因**：Redisson 4.8.0 的 `RScript.ReturnType` 只有 `BOOLEAN / LONG / LIST / STRING / VALUE / MAPVALUE / MAPVALUELIST`
+（`javap` 实测）；Lua 脚本返回整数在 RESP 里是 `<integer>`，映射到 Java `Long`。
+**修复**：`ReturnType.LONG` + 接收 `Long`，再按返回码映射成业务枚举（未识别码必须抛错，不能落成默认值）。
+**顺带两条同类实证**：
+1. `getScript()` **不传 codec 时用默认 JSON codec**，KEYS/ARGV 会被序列化成带引号的 JSON，
+   与 `redis-cli` 直接写的 key 对不上（表现为"redis-cli 明明查不到键"）。**必须** `getScript(StringCodec.INSTANCE)`，
+   读值同理 `getBucket(key, StringCodec.INSTANCE)`；
+2. `redis-cli SCRIPT LOAD "<多行文本>"` 在 PowerShell 下会因参数碎片报 `wrong number of arguments`——
+   与 L1-1 同源（PS 传参给外部程序的坑），不要拿它当"脚本有语法错"的证据。
+**影响面**：所有用 Redisson 跑 Lua 的组件（W5 的预扣/回滚/对账修复、W6 的幂等消费都可能复用）。
+**教训**：AGENTS §6.3「不猜接口」不是口号——连"枚举常量名"这种一眼就对的东西都要 `javap` 看一眼。
+
+### L3-16 Redis 集成测试「静默跳过」= 假绿：Maven surefire fork 拿不到父进程环境变量（W5-P1 实证）
+
+**现象**：`mvn test` 报 `Tests run: 177, Skipped: 16`——分不清是「环境不具备所以跳过」还是「代码没写」。**更要命的是：如果只加了 `$env:BC_TEST_REDIS_PASSWORD` 就以为能跑，实际 surefire fork 进程读不到，测试全 error**（ApplicationContext 加载失败：`Unable to connect to Redis`）。
+**根因**：① surefire 默认 fork 新 JVM，**父 shell 的 `$env:X` 不一定透传**；② 用 `cmd /c "set X=... && mvn ..."` 也不可靠（mvn 是 .bat，环境传递有边界）；③ 测试类用 `@EnabledIf` 探活时读不到密码就整类 skip，**看起来是绿的**。
+**正解（唯一可靠）**：用 `-DargLine` 显式注入 fork JVM：
+```powershell
+cmd /c "mvn -B -ntp -pl <module> test -Dtest=XxxIntegrationTest ""-DargLine=-DBC_TEST_REDIS_PASSWORD=$pw"""
+```
+实测：注入前 16 error / 注入后 **run=16 errors=0 skipped=0**（9.6s 真连 Redis）。
+**影响面**：**所有依赖外部中间件的集成测试**（Redis/RocketMQ/MySQL 真实连接），W5-W6 会大量出现。
+**纪律**：① 集成测试的「跳过」必须在汇报里显式声明，不能只报「全绿」；② 有 skip 的测试数要与预期一致（例如「已知 16 个需要 Redis 的会 skip」，否则就是在掩盖真失败）；③ 怀疑测试没真跑时，看 `target/surefire-reports/*.txt` 的 `Tests run / Skipped / Errors`，不要只看控制台的 `BUILD SUCCESS`。
 
 ---
 

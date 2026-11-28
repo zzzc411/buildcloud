@@ -223,4 +223,35 @@ public interface ErrorCodeConstants {
      */
     ErrorCode REQUISITION_MODE_NOT_IMPLEMENTED = new ErrorCode(1_102_070_000, "申领链路模式【{}】尚未实现（当前仅支持 V1）");
 
+    // ========== V2 Redis 预扣组件 1-102-080-000（W5-P1，spec §6.1 步骤③） ==========
+    /**
+     * 预扣数量非法（必须 > 0）
+     *
+     * Redis 预扣的输入只允许正整数：0 是"没扣也没意义"，负数会变成反向加库存。
+     * 与入库的 {@link #STOCK_INBOUND_QUANTITY_INVALID} 分开成码：那一个是"入库单填错"，
+     * 这一个"预扣请求本身不合法"，前端处置与告警级别都不同。
+     */
+    ErrorCode STOCK_PREDEDUCT_QTY_INVALID = new ErrorCode(1_102_080_000, "预扣数量必须大于 0（当前 {}）");
+
+    /**
+     * Redis 可用量同步失败
+     *
+     * 发生在入库后同步 Redis（{@code StockPredeductService#initAvailable}）时：
+     * 最常见的是 **ACCUMULATE 模式下 key 不存在**（缓存被清 / 首次入库走了错误的模式）。
+     * 必须抛错让人看见——静默成功会让 Redis 与 DB 从这一刻起分叉，
+     * 后续所有预扣都基于错误基线，直到对账 Job 才发现。
+     */
+    ErrorCode STOCK_PREDEDUCT_INIT_FAILED = new ErrorCode(1_102_080_001,
+            "Redis 可用库存同步失败（项目 {}，物料 {}，模式 {}，脚本返回码 {}）");
+
+    /**
+     * 预扣回滚时账目对不上，脚本已拒绝改动
+     *
+     * 两种触发：① 明细存在但可用量 key 丢了；② 传入数量与明细记录不一致。
+     * 语义是"**库存没有还原**"，必须显式暴露：静默当成功会造成"单据已驳回、库存却没还"，
+     * 是账面永久少一块且无人知晓的典型事故（与 V1 的 STOCK_NOT_EXISTS 同款风险思路）。
+     */
+    ErrorCode STOCK_PREDEDUCT_ROLLBACK_CONFLICT = new ErrorCode(1_102_080_002,
+            "预扣回滚失败：申领单 {} 的账目与 Redis 不一致（{}），需人工核对");
+
 }
